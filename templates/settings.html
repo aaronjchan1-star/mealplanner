@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Household</div>
+<h1>Settings</h1>
+<p class="lede">Where you are, who's eating, and where you'd realistically shop. The planner uses these to scope ingredients and prices.</p>
+
+<form method="post" class="card">
+  <div class="row">
+    <div class="field">
+      <label for="location">Location</label>
+      <input type="text" name="location" id="location" value="{{ prefs.location or '' }}" placeholder="suburb, city, country">
+    </div>
+    <div class="field">
+      <label for="currency">Currency</label>
+      <input type="text" name="currency" id="currency" value="{{ prefs.currency or 'AUD' }}">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="adults">Adults in the house</label>
+      <input type="number" name="adults" id="adults" value="{{ prefs.adults or 2 }}" min="1" max="10">
+    </div>
+    <div class="field">
+      <label for="max_travel_minutes">Max travel to a supermarket (min)</label>
+      <input type="number" name="max_travel_minutes" id="max_travel_minutes" value="{{ prefs.max_travel_minutes or 15 }}" min="1" max="120">
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="supermarkets">Nearby supermarkets (comma separated)</label>
+    <input type="text" name="supermarkets" id="supermarkets" value="{{ (prefs.nearby_supermarkets or [])|join(', ') }}" placeholder="Woolworths, Coles, Aldi, IGA">
+  </div>
+
+  <h2 style="margin-top:1.6rem;">Children</h2>
+  <p class="muted tiny">Add a row per child. Age in months is what drives the toddler-nutrition logic.</p>
+
+  <div id="children">
+    {% set kids = prefs.children or [] %}
+    {% for i in range(4) %}
+      {% set k = kids[i] if i < kids|length else {"name":"","age_months":""} %}
+      <div class="row">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" name="child_name" value="{{ k.name or '' }}" placeholder="(empty = skip)">
+        </div>
+        <div class="field">
+          <label>Age (months)</label>
+          <input type="number" name="child_age_months" min="0" max="216" value="{{ k.age_months or '' }}">
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <button type="submit">Save settings</button>
+</form>
+
+{% endblock %}

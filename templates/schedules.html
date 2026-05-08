@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Recurring plans{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Set it once</div>
+<h1>Recurring plans</h1>
+<p class="lede">A schedule generates a new plan automatically — every Sunday morning, say — using the same parameters each time.
+  You can keep one for the family and one for the toddler running in parallel.</p>
+
+<form method="post" class="card">
+  <input type="hidden" name="action" value="add">
+  <h2>New schedule</h2>
+  <div class="row">
+    <div class="field">
+      <label for="audience">Audience</label>
+      <select name="audience" id="audience">
+        <option value="family">family</option>
+        <option value="toddler">toddler</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="cadence">Cadence</label>
+      <select name="cadence" id="cadence">
+        <option value="weekly">weekly</option>
+        <option value="fortnightly">fortnightly</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="next_run">First run</label>
+      <input type="date" name="next_run" id="next_run">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="budget_aud">Budget (AUD)</label>
+      <input type="number" name="budget_aud" id="budget_aud" value="180" min="0">
+    </div>
+    <div class="field">
+      <label for="budget_scope">Scope</label>
+      <select name="budget_scope" id="budget_scope">
+        <option value="per_week">per week</option>
+        <option value="per_meal">per meal</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="max_active_minutes">Max active minutes</label>
+      <input type="number" name="max_active_minutes" id="max_active_minutes" value="25" min="5">
+    </div>
+    <div class="field">
+      <label for="max_ingredients">Max ingredients</label>
+      <input type="number" name="max_ingredients" id="max_ingredients" value="10" min="3">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Meal slots</label>
+    <div class="checkboxes">
+      <label><input type="checkbox" name="meal_slots" value="breakfast"> breakfast</label>
+      <label><input type="checkbox" name="meal_slots" value="lunch"> lunch</label>
+      <label><input type="checkbox" name="meal_slots" value="dinner" checked> dinner</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="cuisines_loved">Cuisines (comma separated)</label>
+    <input type="text" name="cuisines_loved" id="cuisines_loved" placeholder="Italian, Vietnamese, ...">
+  </div>
+
+  <div class="field">
+    <label for="diet_notes">Diet notes</label>
+    <textarea name="diet_notes" id="diet_notes" placeholder="e.g. high protein, leaning out, basketball Thursday + Sunday so light those days"></textarea>
+  </div>
+
+  <button type="submit">Add schedule</button>
+</form>
+
+<div class="section-head"><h2>Active schedules</h2></div>
+<div class="card">
+  {% if schedules %}
+    {% for s in schedules %}
+    <div class="list-row">
+      <div class="what">
+        <strong>{{ s.audience|capitalize }}</strong> · {{ s.cadence }}
+        <div class="meta">
+          next run {{ s.next_run }} ·
+          ${{ "%.0f"|format(s.params.budget_aud or 0) }} ({{ s.params.budget_scope or 'per_week' }}) ·
+          {{ s.params.max_active_minutes or '?' }} min ·
+          {{ (s.params.meal_slots or [])|join(', ') }}
+        </div>
+      </div>
+      <form method="post" style="margin:0;display:flex;gap:.4rem;">
+        <input type="hidden" name="action" value="toggle">
+        <input type="hidden" name="id" value="{{ s.id }}">
+        <input type="hidden" name="active" value="{{ '0' if s.active else '1' }}">
+        <button type="submit" class="ghost tiny-btn">{{ "pause" if s.active else "resume" }}</button>
+      </form>
+      <form method="post" style="margin:0;">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="id" value="{{ s.id }}">
+        <button type="submit" class="danger tiny-btn">delete</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty" style="padding:2rem 0;">No schedules yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

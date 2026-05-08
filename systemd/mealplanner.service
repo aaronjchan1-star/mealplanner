@@ -1,0 +1,19 @@
+[Unit]
+Description=Mealplanner — family meal planning service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/mealplanner
+EnvironmentFile=-/home/pi/mealplanner/.env
+ExecStart=/home/pi/mealplanner/.venv/bin/python /home/pi/mealplanner/app.py
+Restart=on-failure
+RestartSec=5
+
+# Pi Zero W has 512 MB — be a tidy guest
+MemoryMax=180M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

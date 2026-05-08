@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}This week's table{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div>
+    <div class="eyebrow">Volume {{ plans|length }} · this week</div>
+    <h1>What are <span class="accent">we</span> eating?</h1>
+    <p class="lede">A small kitchen-side companion that decides for you. Set a budget,
+      a few rules, the things you'd rather not see again — and get back a week of
+      dinners that fit your life, your trolley, and your toddler.</p>
+    <p>
+      <a class="btn" href="{{ url_for('plan_new') }}">Plan a new week</a>
+      &nbsp;
+      <a href="{{ url_for('toddler') }}">Or just for the little one →</a>
+    </p>
+  </div>
+  <aside class="stats">
+    <div class="stat">
+      <div class="num">{{ plans|length }}</div>
+      <div class="lab">Plans on file</div>
+    </div>
+    <div class="stat">
+      <div class="num">{{ pantry_count }}</div>
+      <div class="lab">Items in pantry</div>
+    </div>
+    <div class="stat">
+      <div class="num">{{ schedules|selectattr("active")|list|length }}</div>
+      <div class="lab">Recurring schedules</div>
+    </div>
+  </aside>
+</section>
+
+<div class="section-head">
+  <h2>Recently planned</h2>
+  <a href="{{ url_for('plan_new') }}">New plan →</a>
+</div>
+
+{% if plans %}
+<div class="grid cols-2">
+  {% for p in plans %}
+  <a class="plan-card" href="{{ url_for('plan_view', plan_id=p.id) }}">
+    <div class="when">{{ p.audience }} · {{ p.created_at[:10] }}</div>
+    <h3>{{ p.payload.summary or "Weekly plan" }}</h3>
+    <div class="summary">
+      {% set days = p.payload.days or [] %}
+      {{ days|length }} day{{ '' if days|length == 1 else 's' }} planned ·
+      ${{ "%.0f"|format(p.payload.estimated_total_cost_aud or 0) }} estimated
+    </div>
+    <div class="meta">
+      {% if p.budget_cents %}<span>budget ${{ "%.0f"|format(p.budget_cents/100) }}</span>{% endif %}
+      <span>week of {{ p.week_start }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">
+  Nothing planned yet. <a href="{{ url_for('plan_new') }}">Start with this week →</a>
+</div>
+{% endif %}
+
+{% if schedules %}
+<div class="section-head">
+  <h2>Recurring</h2>
+  <a href="{{ url_for('schedules') }}">Manage →</a>
+</div>
+<div class="card">
+  {% for s in schedules %}
+    <div class="list-row">
+      <div class="what">
+        <strong>{{ s.audience|capitalize }}</strong> · {{ s.cadence }}
+        <div class="meta">next run {{ s.next_run }} · ${{ "%.0f"|format(s.params.budget_aud or 0) }}</div>
+      </div>
+      <div>{{ "active" if s.active else "paused" }}</div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

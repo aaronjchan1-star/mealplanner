@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Pantry{% endblock %}
+{% block content %}
+
+<div class="eyebrow">What's already in the cupboard</div>
+<h1>Pantry</h1>
+<p class="lede">Anything listed here will be used preferentially before the planner adds new ingredients to the shopping list.
+  Worth keeping the staples (rice, lentils, oils, frozen veg) here so the planner knows.</p>
+
+<form method="post" class="card">
+  <input type="hidden" name="action" value="add">
+  <div class="row">
+    <div class="field"><label for="name">Item</label><input type="text" name="name" id="name" required placeholder="e.g. brown rice"></div>
+    <div class="field"><label for="quantity">Quantity</label><input type="text" name="quantity" id="quantity" placeholder="e.g. 1 kg"></div>
+    <div class="field"><label for="expires_on">Expires</label><input type="date" name="expires_on" id="expires_on"></div>
+    <div class="field" style="flex:0 0 auto;"><label>&nbsp;</label><button type="submit">Add</button></div>
+  </div>
+</form>
+
+<div class="section-head"><h2>In stock</h2></div>
+<div class="card">
+  {% if items %}
+    {% for it in items %}
+    <div class="list-row">
+      <div class="what">
+        <strong>{{ it.name }}</strong>
+        <div class="meta">
+          {% if it.quantity %}{{ it.quantity }}{% endif %}
+          {% if it.expires_on %} · expires {{ it.expires_on }}{% endif %}
+        </div>
+      </div>
+      <form method="post" style="margin:0;">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="id" value="{{ it.id }}">
+        <button type="submit" class="danger tiny-btn">remove</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty" style="padding:2rem 0;">Pantry is empty. Add some staples above.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

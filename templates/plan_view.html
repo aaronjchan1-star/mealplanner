@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}{{ "Toddler plan" if plan.audience == "toddler" else "This week's plan" }}{% endblock %}
+{% block content %}
+
+<div class="eyebrow">{{ plan.audience }} plan · week of {{ plan.week_start }}</div>
+<h1>
+  {% if plan.audience == "toddler" %}
+    For the <span style="font-style:italic;color:var(--terra);">little one</span>
+  {% else %}
+    This week's plan
+  {% endif %}
+</h1>
+
+{% if plan.payload.summary %}
+<p class="summary-prose">{{ plan.payload.summary }}</p>
+{% endif %}
+
+<p class="lede" style="font-size:1rem;font-style:normal;">
+  {% if plan.payload.estimated_total_cost_aud %}
+    Estimated <strong>${{ "%.0f"|format(plan.payload.estimated_total_cost_aud) }}</strong> total
+    {% if plan.budget_cents %}against your ${{ "%.0f"|format(plan.budget_cents/100) }} budget{% endif %}.
+  {% endif %}
+  {% if plan.payload.days %}
+    {{ plan.payload.days|length }} day{{ '' if plan.payload.days|length == 1 else 's' }} planned.
+  {% else %}
+    <strong style="color:var(--terra);">No days were generated — try again or pick fewer days.</strong>
+  {% endif %}
+</p>
+
+{% if plan.payload.days %}
+<div class="export-bar">
+  <span class="export-label">Take it with you</span>
+  <a class="export-btn" href="{{ url_for('export_plan_html', plan_id=plan.id) }}" target="_blank">Print / save as PDF</a>
+  <a class="export-btn" href="{{ url_for('export_recipes_text', plan_id=plan.id) }}">Recipes (.txt)</a>
+  <a class="export-btn" href="{{ url_for('export_shopping_text', plan_id=plan.id) }}">Shopping list (.txt)</a>
+</div>
+{% endif %}
+
+{% if plan.audience == "toddler" and plan.payload.weekly_nutrition_check %}
+<div class="card">
+  <h2>Weekly nutrition check</h2>
+  <div class="nutrition-grid">
+    {% for key, val in plan.payload.weekly_nutrition_check.items() %}
+      <div class="item">
+        <h4>{{ key|replace('_',' ')|capitalize }}</h4>
+        <p>{{ val }}</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% for day in plan.payload.days %}
+<section class="day">
+  <header class="day-head">
+    <span class="num">{{ "%02d"|format(loop.index) }}</span>
+    <h2>{{ day.day }}</h2>
+  </header>
+
+  {% for meal in day.meals %}
+  <article class="meal" data-meal-name="{{ meal.name }}">
+    <div>
+      <div class="slot">{{ meal.slot }}</div>
+      <h3>{{ meal.name }}</h3>
+      <div class="tags">
+        {% if meal.cuisine %}<span class="tag cuisine">{{ meal.cuisine }}</span>{% endif %}
+        {% if meal.active_minutes %}<span class="tag">{{ meal.active_minutes }} min active</span>{% endif %}
+        {% if meal.total_minutes %}<span class="tag">{{ meal.total_minutes }} min total</span>{% endif %}
+        {% if meal.difficulty %}<span class="tag">{{ meal.difficulty }}</span>{% endif %}
+        {% if meal.servings %}<span class="tag">{{ meal.servings }} serves</span>{% endif %}
+        {% if meal.toddler_friendly %}<span class="tag toddler">toddler-friendly</span>{% endif %}
+        {% if meal.shares_with_family_meal %}<span class="tag">shares: {{ meal.shares_with_family_meal }}</span>{% endif %}
+      </div>
+
+      {% if meal.method %}
+      <div class="method">
+        <ol>
+          {% for step in meal.method %}<li>{{ step }}</li>{% endfor %}
+        </ol>
+      </div>
+      {% endif %}
+
+      {% if meal.toddler_modifications %}
+      <p class="muted tiny"><em>For the little one:</em> {{ meal.toddler_modifications }}</p>
+      {% endif %}
+      {% if meal.texture_notes %}
+      <p class="muted tiny"><em>Texture:</em> {{ meal.texture_notes }}</p>
+      {% endif %}
+
+      <div class="feedback">
+        <button onclick="rate({{ plan.id }}, '{{ meal.name|replace("'","\\'") }}', 1, this)">More like this</button>
+        <button onclick="rate({{ plan.id }}, '{{ meal.name|replace("'","\\'") }}', -1, this)">Not again</button>
+        <button onclick="swap(this)">Swap this meal</button>
+      </div>
+    </div>
+
+    <aside class="sidebar">
+      {% if meal.estimated_cost_aud %}
+        <div class="price">${{ "%.2f"|format(meal.estimated_cost_aud) }}</div>
+        <div class="muted tiny">estimated</div>
+        <hr style="border:none;border-top:1px solid var(--line);margin:.8rem 0;">
+      {% endif %}
+      {% if meal.ingredients %}
+      <h4>Ingredients</h4>
+      <ul>
+        {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if meal.uses_pantry %}
+      <p class="tiny muted" style="margin-top:.8rem;"><em>From pantry:</em> {{ meal.uses_pantry|join(", ") }}</p>
+      {% endif %}
+      {% if meal.key_nutrients %}
+      <p class="tiny muted" style="margin-top:.8rem;"><em>Key nutrients:</em> {{ meal.key_nutrients|join(", ") }}</p>
+      {% endif %}
+    </aside>
+  </article>
+  {% endfor %}
+</section>
+{% endfor %}
+
+{% if plan.payload.shopping_list %}
+<section class="shopping">
+  <h2>Shopping list</h2>
+  <p class="muted tiny">Grouped so a single trip should cover it. Prices are estimates.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th><th>Quantity</th>
+        {% if plan.audience == "family" %}<th>Best at</th>{% endif %}
+        <th class="cost">Approx.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in plan.payload.shopping_list %}
+      <tr>
+        <td>{{ item.item }}</td>
+        <td class="muted">{{ item.quantity or "" }}</td>
+        {% if plan.audience == "family" %}<td class="muted">{{ item.best_at or "" }}</td>{% endif %}
+        <td class="cost">${{ "%.2f"|format(item.approx_cost_aud or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="{{ 3 if plan.audience == 'family' else 2 }}">Total</td>
+        <td class="cost">${{ "%.2f"|format(plan.payload.estimated_total_cost_aud or 0) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</section>
+{% endif %}
+
+<style>
+  .summary-prose {
+    font-family: var(--serif);
+    font-size: 1.15rem;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--ink-soft);
+    line-height: 1.5;
+    max-width: 65ch;
+    margin: 0 0 1.5rem;
+  }
+  .export-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .6rem;
+    margin: 1.5rem 0 2.5rem;
+    padding: .9rem 1.1rem;
+    background: var(--cream-2);
+    border-left: 3px solid var(--terra);
+    border-radius: 2px;
+  }
+  .export-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-right: .3rem;
+  }
+  .export-btn {
+    display: inline-block;
+    padding: .35rem .85rem;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-radius: 2px;
+    color: var(--ink);
+    font-size: .82rem;
+    font-weight: 500;
+    transition: background .15s, color .15s;
+  }
+  .export-btn:hover {
+    background: var(--ink);
+    color: var(--cream);
+  }
+</style>
+
+{% endblock %}
+{% block scripts %}
+<script>
+async function rate(planId, mealName, rating, btn) {
+  btn.disabled = true; btn.textContent = "thanks ✓";
+  await fetch("/api/feedback", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({plan_id: planId, meal_name: mealName, rating: rating}),
+  });
+}
+
+async function swap(btn) {
+  const article = btn.closest(".meal");
+  const original = article.outerHTML;
+  btn.disabled = true; btn.textContent = "swapping…";
+  const mealName = article.dataset.mealName;
+  const reason = prompt("Why? (optional — e.g. 'too long', 'don't fancy fish tonight')") || "user wanted a different option";
+  const res = await fetch("/api/swap", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({meal: {name: mealName, slot: article.querySelector(".slot").textContent.trim()}, reason: reason}),
+  });
+  if (!res.ok) { article.outerHTML = original; alert("Swap failed."); return; }
+  const data = await res.json();
+  const m = data.meal;
+  article.querySelector("h3").textContent = m.name || "(unnamed)";
+  const tagBox = article.querySelector(".tags");
+  tagBox.innerHTML = "";
+  if (m.cuisine) tagBox.insertAdjacentHTML("beforeend", `<span class="tag cuisine">${m.cuisine}</span>`);
+  if (m.active_minutes) tagBox.insertAdjacentHTML("beforeend", `<span class="tag">${m.active_minutes} min active</span>`);
+  if (m.difficulty) tagBox.insertAdjacentHTML("beforeend", `<span class="tag">${m.difficulty}</span>`);
+  const method = article.querySelector(".method ol");
+  if (method && m.method) method.innerHTML = m.method.map(s => `<li>${s}</li>`).join("");
+  const ingList = article.querySelector(".sidebar ul");
+  if (ingList && m.ingredients) ingList.innerHTML = m.ingredients.map(i => `<li>${i}</li>`).join("");
+  const price = article.querySelector(".sidebar .price");
+  if (price && m.estimated_cost_aud) price.textContent = "$" + Number(m.estimated_cost_aud).toFixed(2);
+  btn.disabled = false; btn.textContent = "Swap this meal";
+}
+</script>
+{% endblock %}

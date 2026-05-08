@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Plan a new week{% endblock %}
+{% block content %}
+
+<div class="eyebrow">A new plan</div>
+<h1>Tell the kitchen what you need</h1>
+<p class="lede">Just enough rules to make the choice for you.
+  Everything except budget is optional — leave a field blank and the planner uses sensible defaults.</p>
+
+{% if error %}<div class="alert">Something went wrong: {{ error }}</div>{% endif %}
+
+<form method="post" class="card">
+  <div class="row">
+    <div class="field">
+      <label for="budget_aud">Budget (AUD)</label>
+      <input type="number" step="1" min="0" name="budget_aud" id="budget_aud" value="180" required>
+    </div>
+    <div class="field">
+      <label for="budget_scope">Budget scope</label>
+      <select name="budget_scope" id="budget_scope">
+        <option value="per_week" selected>Per week (total)</option>
+        <option value="per_meal">Per meal</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="days">Days</label>
+      <select name="days" id="days">
+        <option value="3">3 days</option>
+        <option value="5">5 days</option>
+        <option value="7" selected>7 days</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field">
+      <label for="max_active_minutes">Max active cook time / meal</label>
+      <select name="max_active_minutes" id="max_active_minutes">
+        <option value="15">15 min — barely cooking</option>
+        <option value="25" selected>25 min — weeknight easy</option>
+        <option value="40">40 min — Sunday-ish</option>
+        <option value="90">No limit</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="max_ingredients">Max ingredients / meal</label>
+      <select name="max_ingredients" id="max_ingredients">
+        <option value="6">6 (very simple)</option>
+        <option value="10" selected>10 (typical)</option>
+        <option value="15">15 (anything goes)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Meal slots</label>
+    <div class="checkboxes">
+      <label><input type="checkbox" name="meal_slots" value="breakfast"> breakfast</label>
+      <label><input type="checkbox" name="meal_slots" value="lunch"> lunch</label>
+      <label><input type="checkbox" name="meal_slots" value="dinner" checked> dinner</label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="cuisines_loved">Cuisines you love (comma separated)</label>
+    <input type="text" name="cuisines_loved" id="cuisines_loved"
+           placeholder="Italian, Vietnamese, Greek, Indian, modern Australian">
+  </div>
+
+  <div class="field">
+    <label for="diet_notes">Diet notes (anything else worth knowing)</label>
+    <textarea name="diet_notes" id="diet_notes"
+              placeholder="e.g. trying to lean out, high protein, one of us trains weights 4x/week, prefer not too much pasta"></textarea>
+  </div>
+
+  <p class="muted tiny">Pulls in your pantry, your dislikes, and recent feedback automatically.
+    Location: <strong>{{ prefs.location }}</strong>. Supermarkets considered:
+    <strong>{{ prefs.nearby_supermarkets|join(", ") }}</strong>.</p>
+
+  <button type="submit">Generate plan</button>
+  <a href="{{ url_for('index') }}" class="muted tiny" style="margin-left:1rem;">cancel</a>
+</form>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Dislikes & allergies{% endblock %}
+{% block content %}
+
+<div class="eyebrow">The veto list</div>
+<h1>Dislikes &amp; allergies</h1>
+<p class="lede">Anything you add here is treated as a hard constraint — the planner will never include it.
+  Use it for fussy ingredients, cuisines you've grown tired of, or actual allergies.</p>
+
+<form method="post" class="card">
+  <input type="hidden" name="action" value="add">
+  <div class="row">
+    <div class="field">
+      <label for="item">Item</label>
+      <input type="text" name="item" id="item" required placeholder="e.g. olives, Thai food, peanuts">
+    </div>
+    <div class="field">
+      <label for="kind">Kind</label>
+      <select name="kind" id="kind">
+        <option value="ingredient">ingredient</option>
+        <option value="cuisine">cuisine</option>
+        <option value="allergy">allergy (treat strictly)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="person">Whose</label>
+      <select name="person" id="person">
+        <option value="household">household</option>
+        <option value="adult">adults only</option>
+        <option value="toddler">toddler</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0 0 auto;"><label>&nbsp;</label><button type="submit">Add</button></div>
+  </div>
+</form>
+
+<div class="section-head"><h2>The list</h2></div>
+<div class="card">
+  {% if items %}
+    {% for it in items %}
+    <div class="list-row">
+      <div class="what">
+        <strong>{{ it.item }}</strong>
+        <span class="tag" style="margin-left:.5rem;">{{ it.kind }}</span>
+        <span class="tag" style="margin-left:.25rem;">{{ it.person }}</span>
+      </div>
+      <form method="post" style="margin:0;">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="id" value="{{ it.id }}">
+        <button type="submit" class="danger tiny-btn">remove</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty" style="padding:2rem 0;">No dislikes set. The planner will use everything.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

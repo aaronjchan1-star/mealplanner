@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ "Toddler plan" if plan.audience == "toddler" else "Meal plan" }} — {{ plan.week_start }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Manrope", system-ui, sans-serif;
+      color: #1f2421;
+      max-width: 780px;
+      margin: 2rem auto;
+      padding: 1.5rem;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+    h1, h2, h3 { font-family: "Fraunces", serif; line-height: 1.15; }
+    h1 { font-size: 2.4rem; margin: 0 0 .3rem; font-weight: 600; letter-spacing: -0.02em; }
+    h2 { font-size: 1.4rem; margin: 1.4rem 0 .6rem; border-bottom: 1px solid #2a3a2a33; padding-bottom: .3rem; }
+    h3 { font-size: 1.1rem; margin: 1rem 0 .3rem; font-weight: 600; }
+    .eyebrow { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.18em; color: #b85c3a; font-weight: 600; }
+    .summary { font-style: italic; color: #4a5450; max-width: 60ch; margin: .6rem 0 1.4rem; font-family: "Fraunces", serif; font-size: 1.05rem; }
+    .meta { color: #4a5450; font-size: .85rem; margin-bottom: 1.5rem; }
+    .meal { padding: .5rem 0 .8rem; border-top: 1px dashed #2a3a2a33; }
+    .meal:first-of-type { border-top: none; }
+    .slot { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.2em; color: #c89b3c; font-weight: 700; }
+    .meal-meta { font-size: .82rem; color: #4a5450; margin: .15rem 0 .5rem; }
+    .ingredients, .method { margin: .4rem 0; }
+    .ingredients { font-size: .9rem; }
+    .ingredients ul { margin: .15rem 0 .3rem 1.2rem; padding: 0; }
+    .ingredients li { margin: .05rem 0; }
+    .method ol { margin: .15rem 0 .3rem 1.2rem; padding: 0; }
+    .method li { margin: .15rem 0; font-size: .92rem; }
+    .toddler-mod, .texture { font-size: .85rem; color: #4a5450; margin: .35rem 0; font-style: italic; }
+    .shopping table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .shopping th, .shopping td { padding: .35rem .4rem; border-bottom: 1px solid #2a3a2a22; text-align: left; }
+    .shopping th { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.15em; color: #4a5450; }
+    .shopping td.cost { font-family: "Fraunces", serif; text-align: right; }
+    .shopping tfoot td { font-weight: 700; border-top: 2px solid #1f2421; }
+    .nutrition { background: #f3ebdc; padding: .8rem 1rem; margin: 1rem 0; border-left: 3px solid #2a3a2a; }
+    .nutrition h3 { margin-top: 0; }
+    .nutrition .row { margin: .3rem 0; font-size: .9rem; }
+    .nutrition .row strong { display: inline-block; min-width: 110px; color: #2a3a2a; }
+    .print-hint { background: #f3ebdc; padding: .8rem 1rem; margin: 1rem 0; font-size: .85rem; border-radius: 3px; }
+    .day { page-break-inside: avoid; margin-top: 1.6rem; }
+    @media print {
+      body { margin: 0; padding: 0.6rem 0.8rem; max-width: 100%; }
+      .print-hint { display: none; }
+      h1 { font-size: 1.9rem; }
+      h2 { margin-top: 1rem; }
+      .day { page-break-inside: auto; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="print-hint">
+  💡 To save as PDF: press <strong>Ctrl+P</strong> (or <strong>Cmd+P</strong> on Mac) and choose "Save as PDF".
+</div>
+
+<div class="eyebrow">{{ plan.audience }} plan · week of {{ plan.week_start }}</div>
+<h1>
+  {% if plan.audience == "toddler" %}For the little one{% else %}This week's plan{% endif %}
+</h1>
+
+{% if plan.payload.summary %}
+<p class="summary">{{ plan.payload.summary }}</p>
+{% endif %}
+
+<div class="meta">
+  {% if plan.payload.estimated_total_cost_aud %}
+    Estimated <strong>${{ "%.0f"|format(plan.payload.estimated_total_cost_aud) }}</strong> total
+    {% if plan.budget_cents %}against ${{ "%.0f"|format(plan.budget_cents/100) }} budget{% endif %} ·
+  {% endif %}
+  {{ plan.payload.days|length }} day{{ '' if plan.payload.days|length == 1 else 's' }}
+</div>
+
+{% if plan.audience == "toddler" and plan.payload.weekly_nutrition_check %}
+<div class="nutrition">
+  <h3>Weekly nutrition check</h3>
+  {% for key, val in plan.payload.weekly_nutrition_check.items() %}
+    <div class="row"><strong>{{ key|replace('_',' ')|capitalize }}:</strong> {{ val }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for day in plan.payload.days %}
+<section class="day">
+  <h2>{{ day.day }}</h2>
+  {% for meal in day.meals %}
+  <div class="meal">
+    <div class="slot">{{ meal.slot }}</div>
+    <h3>{{ meal.name }}</h3>
+    <div class="meal-meta">
+      {% set parts = [] %}
+      {% if meal.cuisine %}{% set _ = parts.append(meal.cuisine) %}{% endif %}
+      {% if meal.active_minutes %}{% set _ = parts.append(meal.active_minutes ~ " min active") %}{% endif %}
+      {% if meal.total_minutes %}{% set _ = parts.append(meal.total_minutes ~ " min total") %}{% endif %}
+      {% if meal.difficulty %}{% set _ = parts.append(meal.difficulty) %}{% endif %}
+      {% if meal.servings %}{% set _ = parts.append(meal.servings ~ " serves") %}{% endif %}
+      {% if meal.estimated_cost_aud %}{% set _ = parts.append("$" ~ "%.2f"|format(meal.estimated_cost_aud)) %}{% endif %}
+      {{ parts|join(" · ") }}
+    </div>
+
+    {% if meal.ingredients %}
+    <div class="ingredients">
+      <strong>Ingredients</strong>
+      <ul>
+        {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if meal.method %}
+    <div class="method">
+      <strong>Method</strong>
+      <ol>
+        {% for step in meal.method %}<li>{{ step }}</li>{% endfor %}
+      </ol>
+    </div>
+    {% endif %}
+
+    {% if meal.toddler_modifications %}
+      <div class="toddler-mod"><strong>For the little one:</strong> {{ meal.toddler_modifications }}</div>
+    {% endif %}
+    {% if meal.texture_notes %}
+      <div class="texture"><strong>Texture:</strong> {{ meal.texture_notes }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+{% if plan.payload.shopping_list %}
+<section class="shopping">
+  <h2>Shopping list</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th><th>Quantity</th>
+        {% if plan.audience == "family" %}<th>Best at</th>{% endif %}
+        <th class="cost">Approx.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in plan.payload.shopping_list %}
+      <tr>
+        <td>{{ item.item }}</td>
+        <td>{{ item.quantity or "" }}</td>
+        {% if plan.audience == "family" %}<td>{{ item.best_at or "" }}</td>{% endif %}
+        <td class="cost">${{ "%.2f"|format(item.approx_cost_aud or 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="{{ 3 if plan.audience == 'family' else 2 }}">Total</td>
+        <td class="cost">${{ "%.2f"|format(plan.payload.estimated_total_cost_aud or 0) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</section>
+{% endif %}
+
+</body>
+</html>
