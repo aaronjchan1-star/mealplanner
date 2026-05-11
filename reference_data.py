@@ -73,6 +73,9 @@ NSW_SUBURBS = sorted(set([
     "North Parramatta", "Northmead", "Wentworthville", "Pendle Hill",
     "Toongabbie", "Old Toongabbie", "Girraween", "Greystanes", "Pemulwuy",
     "Merrylands", "South Wentworthville", "Mays Hill",
+    # Sydney Olympic Park / Homebush Bay
+    "Newington", "Sydney Olympic Park", "Wentworth Point", "Silverwater",
+    "Lewisham", "Summer Hill", "Haberfield",
     # Hills district
     "Baulkham Hills", "Castle Hill", "Bella Vista", "Norwest", "Kellyville",
     "Rouse Hill", "The Ponds", "Stanhope Gardens", "Glenwood", "Parklea",
