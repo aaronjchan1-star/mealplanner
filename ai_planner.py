@@ -38,6 +38,8 @@ You produce structured weekly meal plans by calling the submit_meal_plan tool. Y
 5. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
 6. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
 7. Make sure at least one meal each day works for a toddler — note which ones, with any modifications (less salt, smaller cuts, softer texture).
+8. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
+9. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
 
 CRITICAL OUTPUT RULES:
 - The "summary" field MUST be a single short sentence, maximum 25 words. Do NOT describe the plan in detail there — that detail belongs in the individual meal entries.
@@ -148,6 +150,15 @@ FAMILY_TOOL_SCHEMA = {
                                         "type": "array",
                                         "items": {"type": "string"},
                                         "description": "Items from the household pantry used in this meal",
+                                    },
+                                    "storage_notes": {
+                                        "type": "string",
+                                        "description": "Fridge/freezer life and reheat instructions, if relevant. e.g. 'Keeps 3 days in the fridge. Microwave covered, 90 sec.' Empty if not applicable.",
+                                    },
+                                    "appliances_used": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Which appliances this meal needs (oven, stovetop, microwave, air fryer, etc.)",
                                     },
                                 },
                             },
@@ -346,8 +357,13 @@ def build_family_plan(
     cuisines_loved: List[str],
     diet_notes: str,
     days: int = 7,
+    appliances: Optional[List[str]] = None,
+    cooking_strategy: Optional[Dict[str, bool]] = None,
 ) -> Dict[str, Any]:
     """Generate a family meal plan and return the validated dict."""
+
+    appliances = appliances or ["oven", "stovetop", "microwave"]
+    cooking_strategy = cooking_strategy or {}
 
     user_payload = {
         "household": household,
@@ -361,13 +377,40 @@ def build_family_plan(
         "meal_slots": meal_slots,
         "cuisines_loved": cuisines_loved,
         "diet_notes": diet_notes,
+        "available_appliances": appliances,
+        "cooking_strategy": cooking_strategy,
         "days": days,
     }
+
+    strategy_notes = []
+    if cooking_strategy.get("batch_cook"):
+        strategy_notes.append(
+            "BATCH COOKING is preferred: design at least two 'anchor' meals "
+            "that are cooked once and reused 2-3 times across the week "
+            "(e.g. a Sunday roast that becomes Monday wraps and Tuesday fried rice). "
+            "When you do this, name the followups explicitly in the meal `name` field "
+            "and note the leftover quantities."
+        )
+    if cooking_strategy.get("freezer_friendly"):
+        strategy_notes.append(
+            "FREEZER FRIENDLY: prefer meals that freeze well. For each freezable "
+            "meal, add to `method` a final step like 'Portion and freeze flat — "
+            "thaw overnight, reheat at 180°C 15 min'."
+        )
+    if cooking_strategy.get("microwave_reheats"):
+        strategy_notes.append(
+            "Some meals must REHEAT cleanly in the microwave for next-day lunches. "
+            "Avoid components that go limp or rubbery (no plain pan-fried steak, "
+            "no crispy skin items, etc.) on at least 2-3 dinners. Add reheat "
+            "instructions in the method when relevant."
+        )
+    strategy_block = ("\n\n" + "\n".join(strategy_notes)) if strategy_notes else ""
 
     user_msg = (
         f"Plan {days} days of meals for the household below. "
         "Treat the dislikes list as forbidden. "
-        "Treat the budget as a HARD ceiling — assume Australian supermarket prices.\n\n"
+        "Treat the budget as a HARD ceiling — assume Australian supermarket prices."
+        f"{strategy_block}\n\n"
         f"Inputs (JSON):\n{json.dumps(user_payload, indent=2)}\n\n"
         "REMEMBER: keep summary to one short sentence (max 25 words). "
         f"The days array MUST contain {days} entries, one for each day. "

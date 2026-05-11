@@ -24,11 +24,7 @@
     </div>
     <div class="field">
       <label for="days">Days</label>
-      <select name="days" id="days">
-        <option value="3">3 days</option>
-        <option value="5">5 days</option>
-        <option value="7" selected>7 days</option>
-      </select>
+      <input type="number" name="days" id="days" min="2" max="7" value="7" required>
     </div>
   </div>
 
@@ -59,6 +55,42 @@
       <label><input type="checkbox" name="meal_slots" value="lunch"> lunch</label>
       <label><input type="checkbox" name="meal_slots" value="dinner" checked> dinner</label>
     </div>
+  </div>
+
+  <div class="field">
+    <label>Appliances available</label>
+    <p class="tiny muted" style="margin:.2rem 0 .6rem;">Tick what's in your kitchen. The planner will lean on these where it makes sense.</p>
+    <div class="checkboxes">
+      {% for a in kitchen_appliances %}
+        <label>
+          <input type="checkbox" name="appliances" value="{{ a }}"
+                 {% if a in ['oven','stovetop','microwave'] %}checked{% endif %}>
+          {{ a }}
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Cook-ahead strategy</label>
+    <div class="checkboxes">
+      <label>
+        <input type="checkbox" name="batch_cook" value="1">
+        Lean into batch-cooking
+      </label>
+      <label>
+        <input type="checkbox" name="freezer_friendly" value="1">
+        Prefer freezer-friendly meals
+      </label>
+      <label>
+        <input type="checkbox" name="microwave_reheats" value="1" checked>
+        Some meals must reheat well in the microwave
+      </label>
+    </div>
+    <p class="tiny muted" style="margin-top:.3rem;">
+      Pick batch-cooking and the planner will design meals so one cook session feeds 2-3 nights
+      (e.g. Sunday roast → Monday wraps → Tuesday fried rice). It'll call out which meals freeze well.
+    </p>
   </div>
 
   <div class="field">

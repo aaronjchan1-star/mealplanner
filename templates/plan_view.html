@@ -83,6 +83,9 @@
       {% if meal.toddler_modifications %}
       <p class="muted tiny"><em>For the little one:</em> {{ meal.toddler_modifications }}</p>
       {% endif %}
+      {% if meal.storage_notes %}
+      <p class="muted tiny"><em>Storage:</em> {{ meal.storage_notes }}</p>
+      {% endif %}
       {% if meal.texture_notes %}
       <p class="muted tiny"><em>Texture:</em> {{ meal.texture_notes }}</p>
       {% endif %}
@@ -121,10 +124,14 @@
 {% if plan.payload.shopping_list %}
 <section class="shopping">
   <h2>Shopping list</h2>
-  <p class="muted tiny">Grouped so a single trip should cover it. Prices are estimates.</p>
-  <table>
+  <p class="muted tiny">
+    Tap an item to tick it off. Your progress saves on this device — handy at the shops.
+    <button type="button" class="ghost tiny-btn" onclick="resetShoppingChecks({{ plan.id }})" style="margin-left:.5rem;">reset</button>
+  </p>
+  <table class="shopping-table" data-plan-id="{{ plan.id }}">
     <thead>
       <tr>
+        <th style="width:1.6rem;"></th>
         <th>Item</th><th>Quantity</th>
         {% if plan.audience == "family" %}<th>Best at</th>{% endif %}
         <th class="cost">Approx.</th>
@@ -132,7 +139,8 @@
     </thead>
     <tbody>
       {% for item in plan.payload.shopping_list %}
-      <tr>
+      <tr class="shop-row" data-key="{{ item.item }}">
+        <td><input type="checkbox" class="shop-check" aria-label="{{ item.item }}"></td>
         <td>{{ item.item }}</td>
         <td class="muted">{{ item.quantity or "" }}</td>
         {% if plan.audience == "family" %}<td class="muted">{{ item.best_at or "" }}</td>{% endif %}
@@ -142,7 +150,7 @@
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="{{ 3 if plan.audience == 'family' else 2 }}">Total</td>
+        <td colspan="{{ 4 if plan.audience == 'family' else 3 }}">Total</td>
         <td class="cost">${{ "%.2f"|format(plan.payload.estimated_total_cost_aud or 0) }}</td>
       </tr>
     </tfoot>
@@ -195,6 +203,10 @@
     background: var(--ink);
     color: var(--cream);
   }
+  .shopping-table .shop-row { cursor: pointer; transition: opacity .15s; }
+  .shopping-table .shop-row.checked { opacity: .35; }
+  .shopping-table .shop-row.checked td:not(:first-child) { text-decoration: line-through; }
+  .shopping-table .shop-check { width: 1.05rem; height: 1.05rem; accent-color: var(--forest); cursor: pointer; }
 </style>
 
 {% endblock %}
@@ -236,6 +248,42 @@ async function swap(btn) {
   const price = article.querySelector(".sidebar .price");
   if (price && m.estimated_cost_aud) price.textContent = "$" + Number(m.estimated_cost_aud).toFixed(2);
   btn.disabled = false; btn.textContent = "Swap this meal";
+}
+
+// --- Shopping list checkbox persistence (per browser, per plan) ---
+(function () {
+  const table = document.querySelector(".shopping-table");
+  if (!table) return;
+  const planId = table.dataset.planId;
+  const key = "shop:" + planId;
+  let state = {};
+  try { state = JSON.parse(localStorage.getItem(key) || "{}"); } catch (e) { state = {}; }
+
+  table.querySelectorAll(".shop-row").forEach(row => {
+    const k = row.dataset.key;
+    const cb = row.querySelector(".shop-check");
+    if (state[k]) { cb.checked = true; row.classList.add("checked"); }
+    cb.addEventListener("change", () => {
+      state[k] = cb.checked;
+      row.classList.toggle("checked", cb.checked);
+      localStorage.setItem(key, JSON.stringify(state));
+    });
+    // Tap-anywhere-on-the-row to toggle, for phone use
+    row.addEventListener("click", (e) => {
+      if (e.target.tagName === "INPUT") return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change"));
+    });
+  });
+})();
+
+function resetShoppingChecks(planId) {
+  if (!confirm("Untick everything on this shopping list?")) return;
+  localStorage.removeItem("shop:" + planId);
+  document.querySelectorAll(".shop-row .shop-check").forEach(cb => {
+    cb.checked = false;
+    cb.closest(".shop-row").classList.remove("checked");
+  });
 }
 </script>
 {% endblock %}

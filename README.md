@@ -8,10 +8,18 @@ A self-hosted weekly meal planner for an Australian family with a toddler. Runs 
 - Filters by cooking time, ingredient count, cuisines, dislikes, allergies.
 - Uses the pantry before adding to the shopping list.
 - Knows your nearby supermarkets and groups the shopping list for one trip.
-- Has a separate planner for a toddler that hits NHMRC nutrient targets, prioritises iron / omega-3 DHA / calcium / fibre, and lifts toddler-safe versions of family meals where possible.
+- Has a separate planner for a toddler that hits NHMRC nutrient targets, prioritises iron / omega-3 DHA / calcium / fibre, and lifts toddler-safe versions of family meals where possible. Date of birth is stored once and age is computed fresh — no need to update it monthly.
+- **Appliance-aware**: tell the planner what's in your kitchen (oven, microwave, slow cooker, air fryer…) and it'll lean on what you have.
+- **Batch cooking and freezer-friendly modes**: ask for meals that span 2-3 nights from one cook session, or that freeze cleanly.
 - Recurring schedules: plans appear automatically on Sunday mornings.
 - Feedback (thumbs / swap) feeds into future plans.
-- **Export** any plan as a print-ready HTML page, plain-text recipes, or a plain-text shopping list — readable on any phone, paste-able into any app.
+- **Export** any plan as a print-ready HTML page, plain-text recipes, or a plain-text shopping list.
+- **On-screen shopping list with persistent checkboxes** — open the plan on your phone, tick items as you grab them, the state survives navigating away and coming back.
+
+## Further reading
+
+- [`docs/meal_planning_logic.md`](docs/meal_planning_logic.md) — how plans actually get generated, what the prompt contains, what the AI is and isn't doing, and how to tune it.
+- [`docs/tailscale.md`](docs/tailscale.md) — make the planner reachable from anywhere, securely, without exposing the Pi to the public internet.
 
 ## The setup, in one diagram
 

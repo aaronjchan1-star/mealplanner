@@ -19,6 +19,7 @@ from flask import (
 
 import ai_planner
 import database as db
+from reference_data import KNOWN_SUPERMARKETS, KITCHEN_APPLIANCES, NSW_SUBURBS
 
 try:
     import config
@@ -66,9 +67,15 @@ def plan_new():
             payload = _build_family_plan_from_form(request.form, prefs)
         except Exception as e:
             log.exception("plan generation failed")
-            return render_template("plan_new.html", prefs=prefs, error=str(e)), 500
+            return render_template(
+                "plan_new.html", prefs=prefs, error=str(e),
+                kitchen_appliances=KITCHEN_APPLIANCES,
+            ), 500
         return redirect(url_for("plan_view", plan_id=payload["plan_id"]))
-    return render_template("plan_new.html", prefs=prefs, error=None)
+    return render_template(
+        "plan_new.html", prefs=prefs, error=None,
+        kitchen_appliances=KITCHEN_APPLIANCES,
+    )
 
 
 @app.route("/plan/<int:plan_id>")
@@ -82,22 +89,25 @@ def plan_view(plan_id: int):
 @app.route("/toddler", methods=["GET", "POST"])
 def toddler():
     prefs = db.get_preferences(config.DB_PATH)
-    children = prefs.get("children", [])
-    if not children:
+    raw_children = prefs.get("children", [])
+    if not raw_children:
         return render_template("toddler.html", prefs=prefs, error=(
             "No child is configured. Add one in Settings first."
         ), plans=[])
+    # Resolve DOB -> age_months for display
+    prefs_view = dict(prefs)
+    prefs_view["children"] = [_resolve_child(c) for c in raw_children]
     if request.method == "POST":
         try:
             payload = _build_toddler_plan_from_form(request.form, prefs)
         except Exception as e:
             log.exception("toddler plan generation failed")
             plans = db.list_plans(config.DB_PATH, audience="toddler", limit=6)
-            return render_template("toddler.html", prefs=prefs, error=str(e),
+            return render_template("toddler.html", prefs=prefs_view, error=str(e),
                                    plans=plans), 500
         return redirect(url_for("plan_view", plan_id=payload["plan_id"]))
     plans = db.list_plans(config.DB_PATH, audience="toddler", limit=6)
-    return render_template("toddler.html", prefs=prefs, error=None, plans=plans)
+    return render_template("toddler.html", prefs=prefs_view, error=None, plans=plans)
 
 
 @app.route("/pantry", methods=["GET", "POST"])
@@ -148,25 +158,38 @@ def settings():
         prefs["max_travel_minutes"] = int(
             request.form.get("max_travel_minutes", "15") or "15"
         )
-        prefs["nearby_supermarkets"] = [
-            s.strip() for s in request.form.get("supermarkets", "").split(",") if s.strip()
-        ]
-        # Children: rebuild list from indexed form fields
+        # Supermarkets: now arrive as checkbox list + an "other" text field
+        chains = request.form.getlist("supermarket")
+        other = request.form.get("supermarket_other", "").strip()
+        if other:
+            chains.extend(s.strip() for s in other.split(",") if s.strip())
+        # Preserve insertion order, drop duplicates
+        prefs["nearby_supermarkets"] = list(dict.fromkeys(chains))
+        # Children: rebuild list from indexed form fields. We now prefer DOB
+        # (ISO date string) and compute age_months on the fly, but we keep
+        # accepting age_months for back-compat / manual override.
         names = request.form.getlist("child_name")
-        ages = request.form.getlist("child_age_months")
+        dobs = request.form.getlist("child_dob")
         children = []
-        for n, a in zip(names, ages):
+        for n, dob in zip(names, dobs):
             n = (n or "").strip()
+            dob = (dob or "").strip()
             if not n:
                 continue
-            try:
-                children.append({"name": n, "age_months": int(a)})
-            except ValueError:
-                continue
+            entry = {"name": n}
+            if dob:
+                entry["dob"] = dob
+            children.append(entry)
         prefs["children"] = children
         db.set_preferences(config.DB_PATH, prefs)
         return redirect(url_for("settings"))
-    return render_template("settings.html", prefs=db.get_preferences(config.DB_PATH))
+    return render_template(
+        "settings.html",
+        prefs=db.get_preferences(config.DB_PATH),
+        known_supermarkets=KNOWN_SUPERMARKETS,
+        nsw_suburbs=NSW_SUBURBS,
+        today_iso=_today_iso(),
+    )
 
 
 @app.route("/schedules", methods=["GET", "POST"])
@@ -380,6 +403,13 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
     cuisines_loved = [c.strip() for c in form.get("cuisines_loved", "").split(",") if c.strip()]
     diet_notes = form.get("diet_notes", "")
     days = int(form.get("days", "7") or "7")
+    days = max(2, min(7, days))  # clamp to allowed range
+    appliances = [a for a in form.getlist("appliances") if a]
+    cooking_strategy = {
+        "batch_cook": form.get("batch_cook") == "1",
+        "freezer_friendly": form.get("freezer_friendly") == "1",
+        "microwave_reheats": form.get("microwave_reheats") == "1",
+    }
 
     plan = ai_planner.build_family_plan(
         api_key=config.ANTHROPIC_API_KEY,
@@ -396,6 +426,8 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
         cuisines_loved=cuisines_loved,
         diet_notes=diet_notes,
         days=days,
+        appliances=appliances,
+        cooking_strategy=cooking_strategy,
     )
     plan_id = db.save_plan(
         config.DB_PATH,
@@ -410,8 +442,9 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
 def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
     budget_aud = float(form.get("budget_aud", "0") or "0")
     days = int(form.get("days", "7") or "7")
+    days = max(2, min(7, days))
     child_index = int(form.get("child_index", "0") or "0")
-    child = prefs["children"][child_index]
+    child = _resolve_child(prefs["children"][child_index])
 
     align_with_plan_id = form.get("align_with_plan_id")
     family_plan = None
@@ -449,6 +482,31 @@ def _next_sunday_iso() -> str:
     today = date.today()
     days_ahead = (6 - today.weekday()) % 7 or 7
     return (today + timedelta(days=days_ahead)).isoformat()
+
+
+def _resolve_child(child: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a child dict with age_months always populated.
+
+    Children are stored with DOB (preferred, accurate forever) and optionally
+    a manually-entered age_months (legacy). DOB wins when present.
+    """
+    out = dict(child)
+    if child.get("dob"):
+        try:
+            dob = datetime.fromisoformat(child["dob"]).date()
+            today = date.today()
+            months = (today.year - dob.year) * 12 + (today.month - dob.month)
+            if today.day < dob.day:
+                months -= 1
+            out["age_months"] = max(0, months)
+        except (ValueError, TypeError):
+            log.warning("could not parse dob %r for child %s",
+                        child.get("dob"), child.get("name"))
+    if "age_months" not in out:
+        # Last resort — if neither DOB nor age_months is set, assume 18m
+        # so the toddler-brief logic still has something to work with.
+        out["age_months"] = 18
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +548,7 @@ def _run_scheduled_plans():
                     api_key=config.ANTHROPIC_API_KEY,
                     model=config.MODEL,
                     household=prefs,
-                    child=children[0],
+                    child=_resolve_child(children[0]),
                     pantry=db.list_pantry(config.DB_PATH),
                     dislikes=db.list_dislikes(config.DB_PATH),
                     family_plan=None,

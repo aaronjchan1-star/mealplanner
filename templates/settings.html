@@ -9,8 +9,15 @@
 <form method="post" class="card">
   <div class="row">
     <div class="field">
-      <label for="location">Location</label>
-      <input type="text" name="location" id="location" value="{{ prefs.location or '' }}" placeholder="suburb, city, country">
+      <label for="location">Suburb</label>
+      <input type="text" name="location" id="location" list="suburbs"
+             value="{{ prefs.location or '' }}"
+             placeholder="start typing — e.g. Lidcombe"
+             autocomplete="off">
+      <datalist id="suburbs">
+        {% for s in nsw_suburbs %}<option value="{{ s }}">{% endfor %}
+      </datalist>
+      <p class="tiny muted" style="margin-top:.3rem;">Type to filter. Suburb only is fine — we know you're in NSW.</p>
     </div>
     <div class="field">
       <label for="currency">Currency</label>
@@ -30,25 +37,43 @@
   </div>
 
   <div class="field">
-    <label for="supermarkets">Nearby supermarkets (comma separated)</label>
-    <input type="text" name="supermarkets" id="supermarkets" value="{{ (prefs.nearby_supermarkets or [])|join(', ') }}" placeholder="Woolworths, Coles, Aldi, IGA">
+    <label>Nearby supermarkets</label>
+    <p class="tiny muted" style="margin:.2rem 0 .6rem;">Tick the places you'd realistically shop at. The shopping list will be grouped by these.</p>
+    <div class="checkboxes">
+      {% set current = (prefs.nearby_supermarkets or [])|list %}
+      {% for chain in known_supermarkets %}
+        <label>
+          <input type="checkbox" name="supermarket" value="{{ chain }}"
+                 {% if chain in current %}checked{% endif %}>
+          {{ chain }}
+        </label>
+      {% endfor %}
+    </div>
+    {% set other_items = [] %}
+    {% for s in current %}
+      {% if s not in known_supermarkets %}{% set _ = other_items.append(s) %}{% endif %}
+    {% endfor %}
+    <input type="text" name="supermarket_other"
+           value="{{ other_items|join(', ') }}"
+           placeholder="Anywhere else? (comma separated)"
+           style="margin-top:.6rem;">
   </div>
 
   <h2 style="margin-top:1.6rem;">Children</h2>
-  <p class="muted tiny">Add a row per child. Age in months is what drives the toddler-nutrition logic.</p>
+  <p class="muted tiny">Add a row per child. Date of birth means the age stays current automatically — you don't have to come back and update it every month.</p>
 
   <div id="children">
     {% set kids = prefs.children or [] %}
     {% for i in range(4) %}
-      {% set k = kids[i] if i < kids|length else {"name":"","age_months":""} %}
+      {% set k = kids[i] if i < kids|length else {"name":"","dob":""} %}
       <div class="row">
         <div class="field">
           <label>Name</label>
           <input type="text" name="child_name" value="{{ k.name or '' }}" placeholder="(empty = skip)">
         </div>
         <div class="field">
-          <label>Age (months)</label>
-          <input type="number" name="child_age_months" min="0" max="216" value="{{ k.age_months or '' }}">
+          <label>Date of birth</label>
+          <input type="date" name="child_dob" value="{{ k.dob or '' }}" max="{{ today_iso }}">
         </div>
       </div>
     {% endfor %}
