@@ -57,6 +57,8 @@ You will be told the daycare context:
 - "weekdays_lunch_only": daycare provides only lunch on weekdays.
 - "none": no daycare; the toddler eats everything you plan.
 
+You will also be told the specific `daycare_days` (e.g. ["Monday", "Wednesday", "Friday"]). Treat the daycare context as applying ONLY on those days. On non-daycare weekdays, the toddler is home with a parent all day — plan the meal slots requested for those days and design dinners that deliver more of the day's nutrition (since the toddler hasn't been eating concentrated calories at daycare). Dinner portions on non-daycare days can be slightly larger.
+
 You will be told whether the toddler "eats with family":
 - If true, dinners should match the FAMILY plan provided. Your job is not to invent new dinners but to record what's different for the toddler (smaller portion, no salt, cut to fork-pieces, etc.) using the `shares_with_family_meal` field and texture_notes. The actual cooking is the same.
 - If false, plan a separate, simple toddler dinner.
@@ -479,27 +481,32 @@ def build_toddler_plan(
     eats_with_family: bool = False,
     daycare_lunch_reuse: bool = False,
     weekend_meal_slots: Optional[List[str]] = None,
+    daycare_days: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Generate a toddler meal plan.
 
-    meal_slots: which slots to plan on WEEKDAYS. Defaults to ['dinner'] which
-                matches the common daycare-kid case.
-    weekend_meal_slots: which slots to plan on weekends. Defaults to whatever
-                       meal_slots is set to.
+    meal_slots: which slots to plan on WEEKDAYS. Defaults to ['dinner'].
+    weekend_meal_slots: which slots to plan on weekends. Defaults to meal_slots.
     daycare_context: 'weekdays_full' means daycare provides breakfast / snacks /
-                     lunch on weekdays (so don't try to hit full nutrition from
-                     dinner alone). 'weekdays_lunch_only' means daycare provides
-                     just lunch. 'none' means plan everything.
-    eats_with_family: when True, dinners borrow from family_plan and the toddler
-                      plan just records modifications. Requires family_plan.
-    daycare_lunch_reuse: when True, dinners should produce safe leftovers that
-                         become the next day's daycare lunch.
+                     lunch. 'weekdays_lunch_only' means just lunch. 'none' means
+                     plan everything.
+    daycare_days: which specific weekdays the toddler attends daycare, e.g.
+                  ['Monday', 'Wednesday', 'Friday']. If empty, assumed all
+                  weekdays. Only matters when daycare_context != 'none'.
+    eats_with_family: when True, dinners borrow from family_plan.
+    daycare_lunch_reuse: when True, dinners produce next-day daycare lunches.
+                         Only applies on dinners that come *before* a daycare day.
     """
 
     if meal_slots is None or not meal_slots:
         meal_slots = ["dinner"]
     if weekend_meal_slots is None or not weekend_meal_slots:
         weekend_meal_slots = list(meal_slots)
+    # If a daycare context is set but no specific days listed, assume all weekdays.
+    if daycare_context != "none" and not daycare_days:
+        daycare_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    elif daycare_days is None:
+        daycare_days = []
 
     brief = nutrition.toddler_brief(child["age_months"])
 
@@ -515,40 +522,68 @@ def build_toddler_plan(
         "weekday_meal_slots": meal_slots,
         "weekend_meal_slots": weekend_meal_slots,
         "daycare_context": daycare_context,
+        "daycare_days": daycare_days,
         "eats_with_family": eats_with_family,
         "daycare_lunch_reuse": daycare_lunch_reuse,
     }
 
     # Tailor the user message to the mode the user picked.
     mode_notes = []
-    if daycare_context == "weekdays_full":
+    if daycare_context == "weekdays_full" and daycare_days:
+        dc_list = ", ".join(daycare_days)
+        non_dc_weekdays = [d for d in ["Monday","Tuesday","Wednesday","Thursday","Friday"]
+                           if d not in daycare_days]
+        non_dc_list = ", ".join(non_dc_weekdays) if non_dc_weekdays else "(none)"
         mode_notes.append(
-            "WEEKDAY DAYCARE COVERS most meals — focus on the dinners (and any "
-            "weekend meals requested) as the nutritional anchor. Don't try to "
-            "stuff a full day's iron/calcium/fibre into a single weekday dinner."
+            f"DAYCARE DAYS: {dc_list}. On these days, daycare provides breakfast, "
+            f"morning snack, lunch, and afternoon snack — your dinner is the "
+            f"nutritional anchor and doesn't need to deliver a full day's iron/calcium.\n"
+            f"NON-DAYCARE WEEKDAYS: {non_dc_list}. On these days you are home with "
+            f"the toddler all day — plan the meal slots requested (including more "
+            f"substantial lunches if asked) and design dinners to deliver more of the "
+            f"day's nutrition. Dinner portions may be slightly LARGER on these days "
+            f"since the toddler ate less concentrated calories during the day."
         )
-    elif daycare_context == "weekdays_lunch_only":
+    elif daycare_context == "weekdays_lunch_only" and daycare_days:
+        dc_list = ", ".join(daycare_days)
         mode_notes.append(
-            "DAYCARE COVERS LUNCH on weekdays. The other slots requested are "
-            "yours to plan. Treat lunch as a balanced grain+protein+veg input "
-            "from daycare and complement it across the rest of the day."
+            f"DAYCARE DAYS (lunch only): {dc_list}. On these days, daycare provides "
+            f"only lunch. You plan the other slots requested. Treat lunch as a balanced "
+            f"input (grain + protein + veg) from daycare and complement around it. "
+            f"On non-daycare weekdays, plan lunch too if it's in the slot list."
         )
     if eats_with_family and family_plan:
         mode_notes.append(
             "EATS WITH FAMILY: the toddler dinners on the days the family plan "
-            "covers should `shares_with_family_meal` set to the family meal name, "
+            "covers should set `shares_with_family_meal` to the family meal name, "
             "with `texture_notes` recording the cuts/portion changes and "
             "`toddler_modifications`-style guidance. Do NOT invent new dinners on "
             "those days — record the modifications to the family meal."
         )
-    if daycare_lunch_reuse:
+    if daycare_lunch_reuse and daycare_days:
+        # Compute which dinners come BEFORE a daycare day, so we know which ones
+        # actually need lunchbox leftovers.
+        weekday_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        # The toddler needs a packed lunch tomorrow if tomorrow is a daycare day.
+        # So we want dinner-night-before-daycare-day to be lunchbox-ready.
+        eve_days = []
+        for i, d in enumerate(weekday_order):
+            tomorrow = weekday_order[(i + 1) % 7]
+            if tomorrow in daycare_days:
+                eve_days.append(d)
+        eve_list = ", ".join(eve_days)
+        mode_notes.append(
+            f"DAYCARE LUNCH FROM LEFTOVERS: pack lunches for daycare days. Daycare days are "
+            f"{', '.join(daycare_days)}, so the dinners on {eve_list} should produce safe, "
+            f"lunchbox-friendly leftovers. On OTHER nights you don't need to design for leftovers — "
+            f"those dinners can be smaller / fresher / single-portion. Fill in "
+            f"`daycare_lunch_packing_notes` ONLY on the dinners that precede a daycare day."
+        )
+    elif daycare_lunch_reuse:
         mode_notes.append(
             "DAYCARE LUNCH FROM LEFTOVERS: most dinners should produce a safe, "
-            "lunchbox-friendly leftover for the next weekday. Fill in "
-            "`daycare_lunch_packing_notes` with what to pack cold, what to add "
-            "fresh in the morning (cucumber sticks, cheese, fruit), and whether "
-            "any item shouldn't be packed at all (e.g. anything that needs to "
-            "stay crispy)."
+            "lunchbox-friendly leftover. Fill in `daycare_lunch_packing_notes` "
+            "with what to pack cold, what to add fresh, what to skip."
         )
     mode_block = ("\n\nMODE NOTES:\n- " + "\n- ".join(mode_notes)) if mode_notes else ""
 

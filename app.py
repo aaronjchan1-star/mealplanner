@@ -523,6 +523,8 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
         daycare_context = "none"
     eats_with_family = form.get("eats_with_family") == "1" and family_plan is not None
     daycare_lunch_reuse = form.get("daycare_lunch_reuse") == "1"
+    daycare_days = [d for d in form.getlist("daycare_days") if d in
+                    {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}]
 
     plan = ai_planner.build_toddler_plan(
         api_key=config.ANTHROPIC_API_KEY,
@@ -539,6 +541,7 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
         daycare_context=daycare_context,
         eats_with_family=eats_with_family,
         daycare_lunch_reuse=daycare_lunch_reuse,
+        daycare_days=daycare_days,
     )
     plan_id = db.save_plan(
         config.DB_PATH,
@@ -635,6 +638,7 @@ def _run_scheduled_plans():
                     daycare_context=params.get("daycare_context", "none"),
                     eats_with_family=params.get("eats_with_family", False),
                     daycare_lunch_reuse=params.get("daycare_lunch_reuse", False),
+                    daycare_days=params.get("daycare_days", None),
                 )
                 db.save_plan(config.DB_PATH, today, "toddler", plan,
                              int(round(params.get("budget_aud", 0) * 100)))
