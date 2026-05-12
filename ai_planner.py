@@ -34,10 +34,10 @@ You produce structured weekly meal plans by calling the submit_meal_plan tool. Y
 1. Stay within the household's budget (in AUD).
 2. Use ingredients already in the pantry where possible.
 3. Respect dislikes, allergies, and dietary needs as HARD constraints — never include them.
-4. Keep cooking time and effort within the limits given.
-5. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
-6. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
-7. Make sure at least one meal each day works for a toddler — note which ones, with any modifications (less salt, smaller cuts, softer texture).
+4. **DESIGN DINNERS THAT WORK FOR A TODDLER AS-IS.** If the household has a toddler under 3, the default assumption is that the toddler eats the family dinner. That means: no whole nuts, no honey-glazed anything for under-1s, no very high-mercury fish, modest salt level (cook salt-light; adults can add at the table), avoid raw/undercooked anything. Cut hazards (grapes, cherry tomatoes, sausage rounds) should be quartered lengthways. The `toddler_modifications` field records what the toddler needs *differently* from the adults (e.g. "portion to 1/2 cup, cut pasta into 2cm lengths, no chilli on toddler portion"). Adults season at the table. This is a HARD constraint when a toddler is in the household.
+5. Keep cooking time and effort within the limits given.
+6. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
+7. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
 8. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
 9. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
 
@@ -48,22 +48,45 @@ CRITICAL OUTPUT RULES:
 - Always submit your final plan via the submit_meal_plan tool. Never respond with prose."""
 
 
-SYSTEM_TODDLER = """You are a paediatric meal planner producing weekly meal plans for a toddler.
+SYSTEM_TODDLER = """You are a paediatric meal planner producing weekly meal plans for an Australian toddler.
 
-You hit the NHMRC daily targets you are given. You prioritise the listed focus nutrients (iron, omega-3 DHA, calcium, vitamin D, fibre, iodine). You avoid every item in the "avoid" list as a HARD constraint.
+You will be told which meal slots to plan (any subset of breakfast, morning_snack, lunch, afternoon_snack, dinner) and which days. Plan ONLY the slots requested — do not fabricate meals for slots the user didn't ask for.
 
-You think about:
-- Texture and choking safety for the given age.
-- Iron-rich foods at most days, paired with vitamin C for absorption.
-- Oily fish 1–2x per week.
-- Variety so the toddler is exposed to many flavours and textures.
-- Realistic Australian supermarket ingredients and AUD prices.
-- Keeping prep simple — most toddler meals should take under 15 minutes of active prep, and many should be a smaller version of what the family is eating.
+You will be told the daycare context:
+- "weekdays_full": daycare provides breakfast, morning snack, lunch, afternoon snack on weekdays. You're planning what fills the remaining gaps (dinner most days, plus whatever else the user ticked).
+- "weekdays_lunch_only": daycare provides only lunch on weekdays.
+- "none": no daycare; the toddler eats everything you plan.
 
-CRITICAL OUTPUT RULES:
-- The "summary" field MUST be a single short sentence, maximum 25 words. Do NOT describe the plan in detail there — nutritional reasoning belongs in "weekly_nutrition_check", and meal detail belongs in the individual meal entries.
-- The "days" array MUST contain one entry for every day requested, each with breakfast, morning_snack, lunch, afternoon_snack, and dinner.
-- Always submit your final plan via the submit_toddler_plan tool. Never respond with prose."""
+You will be told whether the toddler "eats with family":
+- If true, dinners should match the FAMILY plan provided. Your job is not to invent new dinners but to record what's different for the toddler (smaller portion, no salt, cut to fork-pieces, etc.) using the `shares_with_family_meal` field and texture_notes. The actual cooking is the same.
+- If false, plan a separate, simple toddler dinner.
+
+You will be told whether to design dinners that pack as next-day daycare lunches:
+- If true, ensure most dinners produce safe lunchbox leftovers — pack-cold-friendly or gentle-rewarm. Record what to pack and any "add fresh" items in `daycare_lunch_packing_notes`.
+
+NUTRITIONAL APPROACH:
+- When daycare provides multiple meals during the week, you are NOT trying to hit full NHMRC daily targets from the dinners you control. You are designing the **anchor meal** that complements what daycare provides. Daycare typically gives a balanced mix of grains, dairy, fruit/veg, and a protein. Your dinners should round out the day — most dinners iron-rich, oily fish 1-2x per week, full-fat dairy somewhere, fibre from vegetables on every dinner.
+- When no daycare context is set, you ARE designing the full day's nutrition across the slots you've been asked to plan, and you should hit the full NHMRC daily targets across the week.
+- Either way, tag every meal you produce with an `iron_profile`:
+   - "heme_rich": meaningful red meat or organ meat in the meal
+   - "non_heme_with_c": plant iron source (lentils, fortified cereal, leafy greens, tofu) paired with vitamin C (citrus, tomato, capsicum, kiwi)
+   - "non_heme_no_c": plant iron source without a vitamin C pair
+   - "low_iron": dinner is low in iron (it's OK to have some of these; not every meal needs iron, but most should)
+- Always include `key_nutrients` listing what this meal genuinely contributes (iron, calcium, omega-3, fibre, etc).
+
+SAFETY (HARD CONSTRAINTS):
+- No whole nuts, whole grapes/cherry tomatoes/sausage rounds (always quarter lengthways)
+- No honey under 12 months
+- No high-mercury fish (shark, swordfish, marlin)
+- No added salt for very young toddlers — flavour with herbs/spices/citrus/garlic
+- No raw or undercooked egg, meat, seafood
+- Texture matches the age band you're given
+
+OUTPUT:
+- Always submit via the submit_toddler_plan tool, never prose.
+- Summary: ONE sentence, max 25 words. Nutritional reasoning goes in `weekly_nutrition_check`.
+- The `days` array must contain ONE entry for every day requested.
+- Each day's `meals` array contains ONLY the slots requested — no extras."""
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +273,15 @@ TODDLER_TOOL_SCHEMA = {
                                     "shares_with_family_meal": {
                                         "type": "string",
                                         "description": "Name of family meal this is based on, or empty",
+                                    },
+                                    "iron_profile": {
+                                        "type": "string",
+                                        "enum": ["heme_rich", "non_heme_with_c", "non_heme_no_c", "low_iron"],
+                                        "description": "Iron quality of this meal. heme_rich = red/organ meat. non_heme_with_c = plant iron paired with vitamin C. non_heme_no_c = plant iron alone. low_iron = neither.",
+                                    },
+                                    "daycare_lunch_packing_notes": {
+                                        "type": "string",
+                                        "description": "If this dinner is intended to also become tomorrow's daycare lunch, record what to pack, what to add fresh, and any reheat-vs-cold guidance. Empty if not applicable.",
                                     },
                                 },
                             },
@@ -442,8 +474,32 @@ def build_toddler_plan(
     family_plan: Optional[Dict[str, Any]],
     budget_aud: float,
     days: int = 7,
+    meal_slots: Optional[List[str]] = None,
+    daycare_context: str = "none",        # 'weekdays_full' | 'weekdays_lunch_only' | 'none'
+    eats_with_family: bool = False,
+    daycare_lunch_reuse: bool = False,
+    weekend_meal_slots: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """Generate a toddler meal plan that, where possible, piggybacks off the family plan."""
+    """Generate a toddler meal plan.
+
+    meal_slots: which slots to plan on WEEKDAYS. Defaults to ['dinner'] which
+                matches the common daycare-kid case.
+    weekend_meal_slots: which slots to plan on weekends. Defaults to whatever
+                       meal_slots is set to.
+    daycare_context: 'weekdays_full' means daycare provides breakfast / snacks /
+                     lunch on weekdays (so don't try to hit full nutrition from
+                     dinner alone). 'weekdays_lunch_only' means daycare provides
+                     just lunch. 'none' means plan everything.
+    eats_with_family: when True, dinners borrow from family_plan and the toddler
+                      plan just records modifications. Requires family_plan.
+    daycare_lunch_reuse: when True, dinners should produce safe leftovers that
+                         become the next day's daycare lunch.
+    """
+
+    if meal_slots is None or not meal_slots:
+        meal_slots = ["dinner"]
+    if weekend_meal_slots is None or not weekend_meal_slots:
+        weekend_meal_slots = list(meal_slots)
 
     brief = nutrition.toddler_brief(child["age_months"])
 
@@ -453,16 +509,58 @@ def build_toddler_plan(
         "pantry": pantry,
         "dislikes": dislikes,
         "nutrition_brief": brief,
-        "family_plan_for_alignment": family_plan,
+        "family_plan_for_alignment": family_plan if eats_with_family else None,
         "budget_aud": budget_aud,
         "days": days,
+        "weekday_meal_slots": meal_slots,
+        "weekend_meal_slots": weekend_meal_slots,
+        "daycare_context": daycare_context,
+        "eats_with_family": eats_with_family,
+        "daycare_lunch_reuse": daycare_lunch_reuse,
     }
 
+    # Tailor the user message to the mode the user picked.
+    mode_notes = []
+    if daycare_context == "weekdays_full":
+        mode_notes.append(
+            "WEEKDAY DAYCARE COVERS most meals — focus on the dinners (and any "
+            "weekend meals requested) as the nutritional anchor. Don't try to "
+            "stuff a full day's iron/calcium/fibre into a single weekday dinner."
+        )
+    elif daycare_context == "weekdays_lunch_only":
+        mode_notes.append(
+            "DAYCARE COVERS LUNCH on weekdays. The other slots requested are "
+            "yours to plan. Treat lunch as a balanced grain+protein+veg input "
+            "from daycare and complement it across the rest of the day."
+        )
+    if eats_with_family and family_plan:
+        mode_notes.append(
+            "EATS WITH FAMILY: the toddler dinners on the days the family plan "
+            "covers should `shares_with_family_meal` set to the family meal name, "
+            "with `texture_notes` recording the cuts/portion changes and "
+            "`toddler_modifications`-style guidance. Do NOT invent new dinners on "
+            "those days — record the modifications to the family meal."
+        )
+    if daycare_lunch_reuse:
+        mode_notes.append(
+            "DAYCARE LUNCH FROM LEFTOVERS: most dinners should produce a safe, "
+            "lunchbox-friendly leftover for the next weekday. Fill in "
+            "`daycare_lunch_packing_notes` with what to pack cold, what to add "
+            "fresh in the morning (cucumber sticks, cheese, fruit), and whether "
+            "any item shouldn't be packed at all (e.g. anything that needs to "
+            "stay crispy)."
+        )
+    mode_block = ("\n\nMODE NOTES:\n- " + "\n- ".join(mode_notes)) if mode_notes else ""
+
     user_msg = (
-        f"Plan {days} days of meals and snacks for the toddler described below. "
-        "Where the family plan has a dinner that can be made toddler-safe, share it (note any modifications). "
-        "Otherwise plan a separate, simple toddler meal. "
-        "Hit the daily nutrition targets across the week, with iron-rich food on most days and oily fish 1–2x.\n\n"
+        f"Plan {days} days of meals for the toddler described below. "
+        "Plan ONLY the meal slots specified for each day (weekday vs weekend). "
+        "Respect the dislikes list as forbidden, treat the avoid list as forbidden, "
+        "and treat the budget as a HARD ceiling.\n"
+        "Iron, omega-3 DHA, and calcium are the focus nutrients — tag each meal "
+        "with an iron_profile, and aim for most dinners to be iron_profile=heme_rich "
+        "or non_heme_with_c."
+        f"{mode_block}\n\n"
         f"Inputs (JSON):\n{json.dumps(user_payload, indent=2, default=str)}\n\n"
         "REMEMBER: keep summary to one short sentence (max 25 words) — put nutrition reasoning in weekly_nutrition_check. "
         f"The days array MUST contain {days} entries. "
@@ -513,3 +611,88 @@ def suggest_swap(
         messages=[{"role": "user", "content": user_msg}],
     )
     return _extract_tool_input(msg, "submit_replacement_meal")
+
+
+# ---------------------------------------------------------------------------
+# Single-meal generation — for "it's 5:30pm, what should I make right now"
+# ---------------------------------------------------------------------------
+
+QUICK_MEAL_TOOL_SCHEMA = {
+    "name": "submit_quick_meal",
+    "description": "Submit a single meal idea given on-hand ingredients and constraints.",
+    "input_schema": {
+        "type": "object",
+        "required": ["name", "ingredients", "method"],
+        "properties": {
+            "name": {"type": "string"},
+            "slot": {"type": "string", "description": "breakfast/lunch/dinner/snack — whichever fits the request"},
+            "active_minutes": {"type": "integer"},
+            "total_minutes": {"type": "integer"},
+            "servings": {"type": "integer"},
+            "ingredients": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "What goes in. Mark items from the user's on-hand list with ✓ at the start, e.g. '✓ salmon fillet 400g'.",
+            },
+            "method": {"type": "array", "items": {"type": "string"}},
+            "toddler_friendly": {"type": "boolean"},
+            "toddler_modifications": {"type": "string"},
+            "why_this": {
+                "type": "string",
+                "description": "One sentence: why this works given the constraints (e.g. 'uses everything you mentioned, 18 min total, iron-rich for the toddler')",
+            },
+            "iron_profile": {
+                "type": "string",
+                "enum": ["heme_rich", "non_heme_with_c", "non_heme_no_c", "low_iron", "not_relevant"],
+            },
+        },
+    },
+}
+
+
+def quick_meal(
+    api_key: str,
+    model: str,
+    *,
+    have_on_hand: str,
+    constraints: str,
+    household: Dict[str, Any],
+    dislikes: List[Dict[str, Any]],
+    audience: str = "family",     # 'family' or 'toddler'
+    child: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """One-shot meal generation. Used for 'what should I make right now'."""
+
+    extra = ""
+    system = SYSTEM_FAMILY
+    if audience == "toddler" and child:
+        brief = nutrition.toddler_brief(child["age_months"])
+        extra = (
+            f"\n\nThis meal is for a toddler. Age in months: {child['age_months']}. "
+            f"Safety constraints — avoid: {brief['avoid']}. "
+            f"Texture guidance: {brief['texture_guidance']}"
+        )
+        system = SYSTEM_TODDLER
+
+    user_msg = (
+        "Suggest a SINGLE meal that uses what's on hand and respects the constraints. "
+        "Don't invent ingredients the user didn't say they had unless they're cheap, common pantry items (salt, oil, pepper, garlic, lemon, herbs, common spices, eggs, flour, butter, basic veg). "
+        "If the user's constraints can't be met, suggest the closest thing and say what's missing in `why_this`. "
+        "Mark on-hand items with ✓ in the ingredients list."
+        f"{extra}\n\n"
+        f"On hand: {have_on_hand}\n"
+        f"Constraints: {constraints}\n"
+        f"Household context: {json.dumps(household)}\n"
+        f"Dislikes (forbidden): {json.dumps(dislikes)}\n\n"
+        "Submit via the submit_quick_meal tool."
+    )
+
+    msg = _client(api_key).messages.create(
+        model=model,
+        max_tokens=2048,
+        system=system,
+        tools=[QUICK_MEAL_TOOL_SCHEMA],
+        tool_choice={"type": "tool", "name": "submit_quick_meal"},
+        messages=[{"role": "user", "content": user_msg}],
+    )
+    return _extract_tool_input(msg, "submit_quick_meal")

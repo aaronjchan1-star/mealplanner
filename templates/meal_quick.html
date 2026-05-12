@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}What's for dinner?{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Tuesday at 5.30pm</div>
+<h1>What should I make?</h1>
+<p class="lede">No plan, no week — just tell me what's in the fridge and I'll suggest one thing. Good for evenings where the plan went out the window.</p>
+
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+<form method="post" class="card">
+  <div class="row">
+    <div class="field">
+      <label for="audience">For</label>
+      <select name="audience" id="audience" onchange="document.getElementById('child-field').style.display = this.value === 'toddler' ? '' : 'none';">
+        <option value="family" {% if form_state.audience == 'family' %}selected{% endif %}>The family</option>
+        {% if children %}
+          <option value="toddler" {% if form_state.audience == 'toddler' %}selected{% endif %}>The little one</option>
+        {% endif %}
+      </select>
+    </div>
+    {% if children %}
+    <div class="field" id="child-field" style="display:{{ '' if form_state.audience == 'toddler' else 'none' }};">
+      <label for="child_index">Which child</label>
+      <select name="child_index" id="child_index">
+        {% for c in children %}
+          <option value="{{ loop.index0 }}" {% if form_state.child_index == loop.index0|string %}selected{% endif %}>{{ c.name }} — {{ c.age_months }} months</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="field">
+    <label for="have_on_hand">What have you got?</label>
+    <textarea name="have_on_hand" id="have_on_hand"
+              placeholder="e.g. salmon fillet, broccoli, half a lemon, brown rice"
+              required>{{ form_state.have_on_hand }}</textarea>
+    <p class="tiny muted" style="margin-top:.3rem;">Comma-separated, rough quantities optional. Assume basics like salt, oil, pepper, garlic, butter are around.</p>
+  </div>
+
+  <div class="field">
+    <label for="constraints">Any constraints?</label>
+    <textarea name="constraints" id="constraints"
+              placeholder="e.g. 20 minutes max, must be high protein, toddler needs to eat it too">{{ form_state.constraints }}</textarea>
+  </div>
+
+  <button type="submit">Tell me what to make</button>
+  <a href="{{ url_for('index') }}" class="muted tiny" style="margin-left:1rem;">cancel</a>
+</form>
+
+{% if result %}
+<article class="quick-result">
+  <div class="eyebrow" style="color:var(--forest);">Tonight</div>
+  <h2>{{ result.name }}</h2>
+
+  {% if result.why_this %}
+  <p class="why">{{ result.why_this }}</p>
+  {% endif %}
+
+  <div class="tags">
+    {% if result.slot %}<span class="tag">{{ result.slot }}</span>{% endif %}
+    {% if result.active_minutes %}<span class="tag">{{ result.active_minutes }} min active</span>{% endif %}
+    {% if result.total_minutes %}<span class="tag">{{ result.total_minutes }} min total</span>{% endif %}
+    {% if result.servings %}<span class="tag">{{ result.servings }} serves</span>{% endif %}
+    {% if result.toddler_friendly %}<span class="tag toddler">toddler-friendly</span>{% endif %}
+    {% if result.iron_profile == 'heme_rich' %}<span class="tag iron-heme">★ heme iron</span>{% endif %}
+    {% if result.iron_profile == 'non_heme_with_c' %}<span class="tag iron-plant-c">plant iron + vit C</span>{% endif %}
+  </div>
+
+  <div class="quick-grid">
+    <div class="quick-method">
+      <h3>Method</h3>
+      <ol>
+        {% for step in result.method %}<li>{{ step }}</li>{% endfor %}
+      </ol>
+      {% if result.toddler_modifications %}
+      <p class="muted tiny"><em>For the little one:</em> {{ result.toddler_modifications }}</p>
+      {% endif %}
+    </div>
+    <aside class="quick-side">
+      <h4>Ingredients</h4>
+      <ul>
+        {% for ing in result.ingredients %}<li>{{ ing }}</li>{% endfor %}
+      </ul>
+      <p class="tiny muted" style="margin-top:.6rem;">✓ = something you mentioned having</p>
+    </aside>
+  </div>
+</article>
+{% endif %}
+
+<style>
+  .quick-result {
+    margin-top: 2rem;
+    padding: 1.6rem 1.8rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--forest);
+  }
+  .quick-result h2 {
+    font-family: var(--serif);
+    font-size: 1.8rem;
+    margin: .4rem 0 .6rem;
+  }
+  .quick-result .why {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--ink-soft);
+    margin: 0 0 1rem;
+    max-width: 60ch;
+  }
+  .quick-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 2rem;
+    margin-top: 1.2rem;
+  }
+  @media (max-width: 640px) {
+    .quick-grid { grid-template-columns: 1fr; }
+  }
+  .quick-method ol { margin: 0; padding-left: 1.2rem; }
+  .quick-method li { margin-bottom: .4rem; }
+  .quick-side {
+    background: var(--cream-2);
+    padding: 1rem 1.1rem;
+    border-radius: 3px;
+  }
+  .quick-side h4 {
+    font-family: var(--serif);
+    margin: 0 0 .5rem;
+    color: var(--forest);
+  }
+  .quick-side ul { margin: 0; padding-left: 1.1rem; }
+  .quick-side li { margin-bottom: .25rem; font-size: .92rem; }
+</style>
+
+{% endblock %}

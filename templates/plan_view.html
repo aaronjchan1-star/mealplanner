@@ -36,6 +36,46 @@
 </div>
 {% endif %}
 
+{% if plan.audience == "toddler" %}
+  {% set iron_counts = {'heme_rich': 0, 'non_heme_with_c': 0, 'non_heme_no_c': 0, 'low_iron': 0, 'unknown': 0} %}
+  {% set total_meals = namespace(n=0) %}
+  {% for day in plan.payload.days %}
+    {% for meal in day.meals %}
+      {% if meal.slot == 'dinner' or meal.slot == 'lunch' %}
+        {% set total_meals.n = total_meals.n + 1 %}
+        {% set p = meal.iron_profile or 'unknown' %}
+        {% if p in iron_counts %}{% set _ = iron_counts.update({p: iron_counts[p] + 1}) %}{% endif %}
+      {% endif %}
+    {% endfor %}
+  {% endfor %}
+  {% if total_meals.n > 0 %}
+  <div class="iron-tally">
+    <div class="iron-tally-head">
+      <h3>Iron across the week</h3>
+      <p class="tiny muted">Toddler iron is the nutrient most worth watching. Counts are across mains (lunch + dinner).</p>
+    </div>
+    <div class="iron-bars">
+      <div class="iron-bar heme">
+        <span class="n">{{ iron_counts.heme_rich }}</span>
+        <span class="lab">heme-rich<br><span class="tiny muted">(red meat)</span></span>
+      </div>
+      <div class="iron-bar plant-c">
+        <span class="n">{{ iron_counts.non_heme_with_c }}</span>
+        <span class="lab">plant + vit&nbsp;C<br><span class="tiny muted">(absorbed well)</span></span>
+      </div>
+      <div class="iron-bar plant-alone">
+        <span class="n">{{ iron_counts.non_heme_no_c }}</span>
+        <span class="lab">plant alone<br><span class="tiny muted">(some iron)</span></span>
+      </div>
+      <div class="iron-bar low">
+        <span class="n">{{ iron_counts.low_iron }}</span>
+        <span class="lab">low iron<br><span class="tiny muted">(fine in moderation)</span></span>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
 {% if plan.audience == "toddler" and plan.payload.weekly_nutrition_check %}
 <div class="card">
   <h2>Weekly nutrition check</h2>
@@ -70,6 +110,9 @@
         {% if meal.servings %}<span class="tag">{{ meal.servings }} serves</span>{% endif %}
         {% if meal.toddler_friendly %}<span class="tag toddler">toddler-friendly</span>{% endif %}
         {% if meal.shares_with_family_meal %}<span class="tag">shares: {{ meal.shares_with_family_meal }}</span>{% endif %}
+        {% if meal.iron_profile == 'heme_rich' %}<span class="tag iron-heme">★ heme iron</span>{% endif %}
+        {% if meal.iron_profile == 'non_heme_with_c' %}<span class="tag iron-plant-c">plant iron + vit C</span>{% endif %}
+        {% if meal.iron_profile == 'non_heme_no_c' %}<span class="tag iron-plant">plant iron</span>{% endif %}
       </div>
 
       {% if meal.method %}
@@ -82,6 +125,9 @@
 
       {% if meal.toddler_modifications %}
       <p class="muted tiny"><em>For the little one:</em> {{ meal.toddler_modifications }}</p>
+      {% endif %}
+      {% if meal.daycare_lunch_packing_notes %}
+      <p class="muted tiny daycare-note"><em>📦 Daycare lunch tomorrow:</em> {{ meal.daycare_lunch_packing_notes }}</p>
       {% endif %}
       {% if meal.storage_notes %}
       <p class="muted tiny"><em>Storage:</em> {{ meal.storage_notes }}</p>
@@ -158,6 +204,17 @@
 </section>
 {% endif %}
 
+<section class="danger-zone">
+  <div>
+    <h3>Done with this plan?</h3>
+    <p class="tiny muted">Deleting removes the plan permanently. Your feedback (thumbs up/down on individual meals) is kept and still informs future plans.</p>
+  </div>
+  <form method="post" action="{{ url_for('plan_delete', plan_id=plan.id) }}"
+        onsubmit="return confirm('Delete this plan? This cannot be undone.');">
+    <button type="submit" class="danger">Delete plan</button>
+  </form>
+</section>
+
 <style>
   .summary-prose {
     font-family: var(--serif);
@@ -207,6 +264,83 @@
   .shopping-table .shop-row.checked { opacity: .35; }
   .shopping-table .shop-row.checked td:not(:first-child) { text-decoration: line-through; }
   .shopping-table .shop-check { width: 1.05rem; height: 1.05rem; accent-color: var(--forest); cursor: pointer; }
+  .danger-zone {
+    margin: 4rem 0 1rem;
+    padding: 1.2rem 1.4rem;
+    border: 1px dashed var(--line);
+    border-radius: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.2rem;
+    background: transparent;
+  }
+  .danger-zone h3 {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    margin: 0 0 .2rem;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .danger-zone p { margin: 0; max-width: 50ch; }
+  .danger-zone form { margin: 0; }
+  .iron-tally {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--terra);
+    padding: 1rem 1.4rem;
+    margin: 1.5rem 0 2rem;
+    border-radius: 3px;
+  }
+  .iron-tally-head h3 {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    margin: 0 0 .2rem;
+    color: var(--forest);
+    font-weight: 600;
+  }
+  .iron-tally-head p { margin: 0 0 .8rem; }
+  .iron-bars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: .8rem;
+  }
+  @media (max-width: 540px) { .iron-bars { grid-template-columns: repeat(2, 1fr); } }
+  .iron-bar {
+    text-align: center;
+    padding: .6rem .3rem;
+    background: var(--cream);
+    border-radius: 3px;
+  }
+  .iron-bar.heme { background: #e9d3c4; }
+  .iron-bar.plant-c { background: #dde6d4; }
+  .iron-bar.plant-alone { background: #e9dec8; }
+  .iron-bar.low { background: #ece6da; }
+  .iron-bar .n {
+    display: block;
+    font-family: var(--serif);
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--forest);
+    line-height: 1;
+    margin-bottom: .2rem;
+  }
+  .iron-bar .lab {
+    font-size: .82rem;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .tag.iron-heme { background: var(--terra); color: var(--cream); }
+  .tag.iron-plant-c { background: var(--forest); color: var(--cream); }
+  .tag.iron-plant { background: var(--cream-2); color: var(--ink-soft); }
+  .daycare-note {
+    background: var(--cream-2);
+    padding: .4rem .65rem !important;
+    border-radius: 3px;
+    margin: .5rem 0 !important;
+    color: var(--ink) !important;
+  }
 </style>
 
 {% endblock %}

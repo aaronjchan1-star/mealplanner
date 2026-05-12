@@ -209,6 +209,12 @@ def get_plan(db_path: str, plan_id: int) -> Optional[Dict[str, Any]]:
         return d
 
 
+def delete_plan(db_path: str, plan_id: int) -> None:
+    """Remove a plan and any feedback rows pointing at it."""
+    with get_conn(db_path) as c:
+        c.execute("DELETE FROM plans WHERE id = ?", (plan_id,))
+
+
 # --- Schedules ------------------------------------------------------------
 
 def list_schedules(db_path: str) -> List[Dict[str, Any]]:

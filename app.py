@@ -86,6 +86,19 @@ def plan_view(plan_id: int):
     return render_template("plan_view.html", plan=plan)
 
 
+@app.post("/plan/<int:plan_id>/delete")
+def plan_delete(plan_id: int):
+    plan = db.get_plan(config.DB_PATH, plan_id)
+    if not plan:
+        abort(404)
+    db.delete_plan(config.DB_PATH, plan_id)
+    log.info("deleted plan %s (%s)", plan_id, plan["audience"])
+    # Send the user back to the listing for whichever audience this was
+    if plan["audience"] == "toddler":
+        return redirect(url_for("toddler"))
+    return redirect(url_for("index"))
+
+
 @app.route("/toddler", methods=["GET", "POST"])
 def toddler():
     prefs = db.get_preferences(config.DB_PATH)
@@ -255,6 +268,56 @@ def api_swap():
         dislikes=db.list_dislikes(config.DB_PATH),
     )
     return jsonify({"ok": True, "meal": new_meal})
+
+
+@app.route("/meal/quick", methods=["GET", "POST"])
+def meal_quick():
+    """Single-meal generator — for 'what should I make right now'."""
+    prefs = db.get_preferences(config.DB_PATH)
+    raw_children = prefs.get("children", [])
+    children = [_resolve_child(c) for c in raw_children]
+    result = None
+    error = None
+    form_state = {
+        "have_on_hand": "",
+        "constraints": "",
+        "audience": "family",
+        "child_index": "0",
+    }
+    if request.method == "POST":
+        form_state["have_on_hand"] = request.form.get("have_on_hand", "").strip()
+        form_state["constraints"] = request.form.get("constraints", "").strip()
+        form_state["audience"] = request.form.get("audience", "family")
+        form_state["child_index"] = request.form.get("child_index", "0")
+        if not form_state["have_on_hand"]:
+            error = "Tell me what you've got — even just two or three things."
+        else:
+            try:
+                child = None
+                if form_state["audience"] == "toddler" and children:
+                    idx = int(form_state["child_index"] or "0")
+                    if 0 <= idx < len(children):
+                        child = children[idx]
+                result = ai_planner.quick_meal(
+                    api_key=config.ANTHROPIC_API_KEY,
+                    model=config.MODEL,
+                    have_on_hand=form_state["have_on_hand"],
+                    constraints=form_state["constraints"] or "Standard weeknight: 20-30 min, simple.",
+                    household=prefs,
+                    dislikes=db.list_dislikes(config.DB_PATH),
+                    audience=form_state["audience"],
+                    child=child,
+                )
+            except Exception as e:
+                log.exception("quick meal failed")
+                error = str(e)
+    return render_template(
+        "meal_quick.html",
+        children=children,
+        form_state=form_state,
+        result=result,
+        error=error,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +516,14 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
         if fp:
             family_plan = fp["payload"]
 
+    meal_slots = [s for s in form.getlist("meal_slots") if s] or ["dinner"]
+    weekend_meal_slots = [s for s in form.getlist("weekend_meal_slots") if s] or meal_slots
+    daycare_context = form.get("daycare_context", "none")
+    if daycare_context not in {"none", "weekdays_full", "weekdays_lunch_only"}:
+        daycare_context = "none"
+    eats_with_family = form.get("eats_with_family") == "1" and family_plan is not None
+    daycare_lunch_reuse = form.get("daycare_lunch_reuse") == "1"
+
     plan = ai_planner.build_toddler_plan(
         api_key=config.ANTHROPIC_API_KEY,
         model=config.MODEL,
@@ -463,6 +534,11 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
         family_plan=family_plan,
         budget_aud=budget_aud,
         days=days,
+        meal_slots=meal_slots,
+        weekend_meal_slots=weekend_meal_slots,
+        daycare_context=daycare_context,
+        eats_with_family=eats_with_family,
+        daycare_lunch_reuse=daycare_lunch_reuse,
     )
     plan_id = db.save_plan(
         config.DB_PATH,
@@ -553,6 +629,12 @@ def _run_scheduled_plans():
                     dislikes=db.list_dislikes(config.DB_PATH),
                     family_plan=None,
                     budget_aud=params.get("budget_aud", 50),
+                    days=params.get("days", 7),
+                    meal_slots=params.get("meal_slots", ["dinner"]),
+                    weekend_meal_slots=params.get("weekend_meal_slots", None),
+                    daycare_context=params.get("daycare_context", "none"),
+                    eats_with_family=params.get("eats_with_family", False),
+                    daycare_lunch_reuse=params.get("daycare_lunch_reuse", False),
                 )
                 db.save_plan(config.DB_PATH, today, "toddler", plan,
                              int(round(params.get("budget_aud", 0) * 100)))
