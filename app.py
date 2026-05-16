@@ -178,6 +178,21 @@ def settings():
             chains.extend(s.strip() for s in other.split(",") if s.strip())
         # Preserve insertion order, drop duplicates
         prefs["nearby_supermarkets"] = list(dict.fromkeys(chains))
+        # Lifter protein target (per-serve, optional). 0 / empty => not set.
+        raw_target = request.form.get("lifter_protein_target", "").strip()
+        if raw_target:
+            try:
+                v = int(raw_target)
+                prefs["lifter_protein_target"] = v if v > 0 else None
+            except ValueError:
+                prefs["lifter_protein_target"] = None
+        else:
+            prefs["lifter_protein_target"] = None
+        # Default training days (also overridable per plan).
+        prefs["default_training_days"] = [
+            d for d in request.form.getlist("default_training_days")
+            if d in {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}
+        ]
         # Children: rebuild list from indexed form fields. We now prefer DOB
         # (ISO date string) and compute age_months on the fly, but we keep
         # accepting age_months for back-compat / manual override.
@@ -406,6 +421,20 @@ def _format_recipes_text(plan: Dict[str, Any]) -> str:
                 out.append("\n  Method:")
                 for i, step in enumerate(meal["method"], 1):
                     out.append(f"    {i}. {step}")
+            if meal.get("portion_strategies"):
+                out.append("\n  On the plates:")
+                for p_ in meal["portion_strategies"]:
+                    line = f"    - {p_.get('person','?')}: {p_.get('serve_description','')}"
+                    bits = []
+                    if p_.get("protein_g_estimate"):
+                        bits.append(f"~{p_['protein_g_estimate']}g protein")
+                    if p_.get("kcal_estimate"):
+                        bits.append(f"~{p_['kcal_estimate']} kcal")
+                    if bits:
+                        line += f"  ({', '.join(bits)})"
+                    out.append(line)
+                    if p_.get("addons"):
+                        out.append(f"      + {p_['addons']}")
             if meal.get("toddler_modifications"):
                 out.append(f"\n  For the little one: {meal['toddler_modifications']}")
             if meal.get("texture_notes"):
@@ -474,6 +503,20 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
         "microwave_reheats": form.get("microwave_reheats") == "1",
     }
 
+    # Lifter protein target lives in Settings but can be overridden per plan.
+    # 0 / empty means "no lifter, don't tailor protein".
+    raw_target = form.get("lifter_protein_target", "").strip()
+    if not raw_target:
+        raw_target = str(prefs.get("lifter_protein_target", "") or "")
+    try:
+        lifter_protein_target = int(raw_target) if raw_target else None
+        if lifter_protein_target == 0:
+            lifter_protein_target = None
+    except ValueError:
+        lifter_protein_target = None
+    training_days = [d for d in form.getlist("training_days") if d in
+                     {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}]
+
     plan = ai_planner.build_family_plan(
         api_key=config.ANTHROPIC_API_KEY,
         model=config.MODEL,
@@ -491,6 +534,8 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
         days=days,
         appliances=appliances,
         cooking_strategy=cooking_strategy,
+        lifter_protein_target=lifter_protein_target,
+        training_days=training_days,
     )
     plan_id = db.save_plan(
         config.DB_PATH,

@@ -59,6 +59,32 @@
            style="margin-top:.6rem;">
   </div>
 
+  <h2 style="margin-top:1.6rem;">Lifter / training (optional)</h2>
+  <p class="muted tiny">If someone in the household trains regularly, set a per-serve protein target. The planner will add a "Lifter" portion to each dinner with extra protein on training days. Leave blank to skip.</p>
+  <div class="row">
+    <div class="field">
+      <label for="lifter_protein_target">Protein target per serve (g)</label>
+      <input type="number" name="lifter_protein_target" id="lifter_protein_target"
+             min="0" max="80" step="5"
+             value="{{ prefs.lifter_protein_target or '' }}"
+             placeholder="e.g. 40">
+    </div>
+  </div>
+  <div class="field">
+    <label>Default training days</label>
+    <p class="tiny muted" style="margin:.2rem 0 .6rem;">Used as the default when creating a plan. You can override per plan.</p>
+    {% set tdays = prefs.default_training_days or [] %}
+    <div class="checkboxes">
+      {% for d in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+        <label>
+          <input type="checkbox" name="default_training_days" value="{{ d }}"
+                 {% if d in tdays %}checked{% endif %}>
+          {{ d[:3] }}
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+
   <h2 style="margin-top:1.6rem;">Children</h2>
   <p class="muted tiny">Add a row per child. Date of birth means the age stays current automatically — you don't have to come back and update it every month.</p>
 

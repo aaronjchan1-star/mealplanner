@@ -35,15 +35,19 @@ You produce structured weekly meal plans by calling the submit_meal_plan tool. Y
 2. Use ingredients already in the pantry where possible.
 3. Respect dislikes, allergies, and dietary needs as HARD constraints — never include them.
 4. **DESIGN DINNERS THAT WORK FOR A TODDLER AS-IS.** If the household has a toddler under 3, the default assumption is that the toddler eats the family dinner. That means: no whole nuts, no honey-glazed anything for under-1s, no very high-mercury fish, modest salt level (cook salt-light; adults can add at the table), avoid raw/undercooked anything. Cut hazards (grapes, cherry tomatoes, sausage rounds) should be quartered lengthways. The `toddler_modifications` field records what the toddler needs *differently* from the adults (e.g. "portion to 1/2 cup, cut pasta into 2cm lengths, no chilli on toddler portion"). Adults season at the table. This is a HARD constraint when a toddler is in the household.
-5. Keep cooking time and effort within the limits given.
-6. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
-7. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
-8. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
-9. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
+5. **Lower-calorie default.** Lean toward dishes that are nutritionally dense but not calorically heavy: more vegetables, leaner protein cuts (chicken thigh fine, but skin off; lean mince; fish; legumes), wholegrain or smaller carb portions, olive oil rather than cream/butter as the main fat. Avoid pastry, deep-fried, very cheesy bakes, and cream-based sauces as the default. Per-serve calorie estimate for the standard adult portion should usually land in **450-650 kcal**, occasionally up to 750 for a deliberately satisfying meal. NOT a diet plan — meals should still be properly satisfying, just designed thoughtfully.
+6. **Plated portions, per-person.** This household eats individually plated meals, not family-style serve-yourself. Every meal MUST include a `portion_strategies` array with one entry per adult eater — at minimum a "Standard adult" entry, and a "Lifter" entry if the household has a lifter on the day's training days. Each entry records what's actually on that person's plate: protein source quantity, carb/veg quantities, estimated grams of protein and kcal for that serve. The toddler is NOT included in portion_strategies — toddler details continue to go in `toddler_modifications`.
+7. **Training-day protein.** If the day is a training day for a household lifter and a protein target is set, the lifter's `portion_strategies` entry must deliver the target (commonly 35-50g). Achieve this through plate-up choices (extra protein on the lifter's plate, or a simple add-on like a boiled egg or a serve of cottage cheese on the side) rather than by re-engineering the dish. On non-training days the lifter's portion can be the same as the standard adult portion.
+8. Keep cooking time and effort within the limits given.
+9. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
+10. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
+11. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
+12. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
 
 CRITICAL OUTPUT RULES:
 - The "summary" field MUST be a single short sentence, maximum 25 words. Do NOT describe the plan in detail there — that detail belongs in the individual meal entries.
 - The "days" array MUST contain one entry for every day requested, with at least one meal per day for each requested slot.
+- Every meal MUST have a populated `portion_strategies` array (at least one entry, "Standard adult"). Be realistic with the gram and kcal estimates — don't invent precise numbers, use sensible ranges based on the cuts and quantities you've specified.
 - Be realistic about Australian supermarket prices. Don't invent ingredients that aren't sold here.
 - Always submit your final plan via the submit_meal_plan tool. Never respond with prose."""
 
@@ -184,6 +188,36 @@ FAMILY_TOOL_SCHEMA = {
                                         "type": "array",
                                         "items": {"type": "string"},
                                         "description": "Which appliances this meal needs (oven, stovetop, microwave, air fryer, etc.)",
+                                    },
+                                    "portion_strategies": {
+                                        "type": "array",
+                                        "description": "Per-eater plate breakdown for adults. ALWAYS include at least one entry ('Standard adult'). Add a 'Lifter' entry on training days when a lifter is in the household. Do NOT include toddler entries here — toddler info goes in toddler_modifications.",
+                                        "items": {
+                                            "type": "object",
+                                            "required": ["person", "serve_description", "protein_g_estimate", "kcal_estimate"],
+                                            "properties": {
+                                                "person": {
+                                                    "type": "string",
+                                                    "description": "Who this plate is for. Common values: 'Standard adult', 'Lifter', 'Lighter serve'.",
+                                                },
+                                                "serve_description": {
+                                                    "type": "string",
+                                                    "description": "What's actually on this plate, in plain English. e.g. '180g chicken thigh, 2/3 cup brown rice, large handful of broccoli'",
+                                                },
+                                                "protein_g_estimate": {
+                                                    "type": "integer",
+                                                    "description": "Estimated grams of protein for this serve. Sensible range: 20-60.",
+                                                },
+                                                "kcal_estimate": {
+                                                    "type": "integer",
+                                                    "description": "Estimated kcal for this serve. Sensible range: 400-800 for adult meals.",
+                                                },
+                                                "addons": {
+                                                    "type": "string",
+                                                    "description": "Optional simple side that distinguishes this plate, e.g. 'plus a boiled egg' or 'plus a tub of plain yoghurt'. Empty if none.",
+                                                },
+                                            },
+                                        },
                                     },
                                 },
                             },
@@ -393,11 +427,14 @@ def build_family_plan(
     days: int = 7,
     appliances: Optional[List[str]] = None,
     cooking_strategy: Optional[Dict[str, bool]] = None,
+    lifter_protein_target: Optional[int] = None,
+    training_days: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Generate a family meal plan and return the validated dict."""
 
     appliances = appliances or ["oven", "stovetop", "microwave"]
     cooking_strategy = cooking_strategy or {}
+    training_days = training_days or []
 
     user_payload = {
         "household": household,
@@ -413,6 +450,8 @@ def build_family_plan(
         "diet_notes": diet_notes,
         "available_appliances": appliances,
         "cooking_strategy": cooking_strategy,
+        "lifter_protein_target_g": lifter_protein_target,
+        "training_days": training_days,
         "days": days,
     }
 
@@ -437,6 +476,23 @@ def build_family_plan(
             "Avoid components that go limp or rubbery (no plain pan-fried steak, "
             "no crispy skin items, etc.) on at least 2-3 dinners. Add reheat "
             "instructions in the method when relevant."
+        )
+    if lifter_protein_target and training_days:
+        strategy_notes.append(
+            f"LIFTER IN THE HOUSEHOLD: training days are {', '.join(training_days)}. "
+            f"On those days, the meal's `portion_strategies` array must include a "
+            f"'Lifter' entry whose serve hits ~{lifter_protein_target}g protein. "
+            f"On non-training days, the Lifter entry can be omitted (the lifter eats "
+            f"the standard adult portion). Achieve the protein target through portion "
+            f"size on the lifter's plate, or simple add-ons (a boiled egg, a tub of "
+            f"plain yoghurt, an extra serve of cottage cheese) — never by re-engineering "
+            f"the dish for everyone."
+        )
+    elif lifter_protein_target:
+        strategy_notes.append(
+            f"LIFTER IN THE HOUSEHOLD with target {lifter_protein_target}g protein per "
+            f"serve. No specific training days given — include a 'Lifter' portion_strategy "
+            f"on every meal."
         )
     strategy_block = ("\n\n" + "\n".join(strategy_notes)) if strategy_notes else ""
 
