@@ -38,11 +38,12 @@ You produce structured weekly meal plans by calling the submit_meal_plan tool. Y
 5. **Lower-calorie default.** Lean toward dishes that are nutritionally dense but not calorically heavy: more vegetables, leaner protein cuts (chicken thigh fine, but skin off; lean mince; fish; legumes), wholegrain or smaller carb portions, olive oil rather than cream/butter as the main fat. Avoid pastry, deep-fried, very cheesy bakes, and cream-based sauces as the default. Per-serve calorie estimate for the standard adult portion should usually land in **450-650 kcal**, occasionally up to 750 for a deliberately satisfying meal. NOT a diet plan — meals should still be properly satisfying, just designed thoughtfully.
 6. **Plated portions, per-person.** This household eats individually plated meals, not family-style serve-yourself. Every meal MUST include a `portion_strategies` array with one entry per adult eater — at minimum a "Standard adult" entry, and a "Lifter" entry if the household has a lifter on the day's training days. Each entry records what's actually on that person's plate: protein source quantity, carb/veg quantities, estimated grams of protein and kcal for that serve. The toddler is NOT included in portion_strategies — toddler details continue to go in `toddler_modifications`.
 7. **Training-day protein.** If the day is a training day for a household lifter and a protein target is set, the lifter's `portion_strategies` entry must deliver the target (commonly 35-50g). Achieve this through plate-up choices (extra protein on the lifter's plate, or a simple add-on like a boiled egg or a serve of cottage cheese on the side) rather than by re-engineering the dish. On non-training days the lifter's portion can be the same as the standard adult portion.
-8. Keep cooking time and effort within the limits given.
-9. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
-10. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
-11. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
-12. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
+8. **Breakfast is simple.** When breakfast is in the requested meal slots, do NOT design a recipe. Every breakfast entry should be: name "Weetabix and milk" (or a similar fibre cereal — same family across the week), `active_minutes` = 2, `total_minutes` = 2, method = ["Pour cereal into a bowl. Add milk. Eat before the morning gets away from you."], ingredients = ["Weetabix (or similar fibre cereal)", "milk"]. Set `portion_strategies` with one "Standard adult" entry — roughly 3 biscuits + 250ml milk per serve, ~12g protein, ~250 kcal. If a lifter portion is needed on a training day, bump to 4 biscuits + 300ml milk + a tub of Greek yoghurt on the side and adjust the numbers (~30g protein, ~400 kcal). Then make sure the shopping list includes enough cereal and milk for the week (assume ~3 biscuits per adult per breakfast day, and ~250ml milk per adult per breakfast day plus extra for coffee/tea/cooking). Don't propose toast, eggs, smoothies, avocado, granola, or anything else for breakfast — the household has decided breakfast is cereal so they can get to work.
+9. Keep cooking time and effort within the limits given.
+10. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
+11. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
+12. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
+13. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
 
 CRITICAL OUTPUT RULES:
 - The "summary" field MUST be a single short sentence, maximum 25 words. Do NOT describe the plan in detail there — that detail belongs in the individual meal entries.
@@ -429,8 +430,14 @@ def build_family_plan(
     cooking_strategy: Optional[Dict[str, bool]] = None,
     lifter_protein_target: Optional[int] = None,
     training_days: Optional[List[str]] = None,
+    calibration: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Generate a family meal plan and return the validated dict."""
+    """Generate a family meal plan and return the validated dict.
+
+    `calibration` is the multiplier dict returned by db.calibration_multiplier.
+    When the household consistently spends more (or less) than estimates, we
+    pass that ratio in so the planner can tighten its own estimates.
+    """
 
     appliances = appliances or ["oven", "stovetop", "microwave"]
     cooking_strategy = cooking_strategy or {}
@@ -494,6 +501,32 @@ def build_family_plan(
             f"serve. No specific training days given — include a 'Lifter' portion_strategy "
             f"on every meal."
         )
+    if calibration and calibration.get("ready") and calibration.get("multiplier"):
+        m = calibration["multiplier"]
+        n = calibration["n"]
+        if m >= 1.05:
+            strategy_notes.append(
+                f"BUDGET CALIBRATION: based on {n} actual receipts, this household consistently "
+                f"spends about {(m-1)*100:.0f}% MORE than your AI-estimated totals. Your raw "
+                f"price estimates are running low — typically due to brand choices, larger pack "
+                f"sizes, or items not in your default training data. Aim to keep your raw "
+                f"`estimated_total_cost_aud` at or below ${budget_aud/m:.0f} so that after the "
+                f"household's typical {(m-1)*100:.0f}% overshoot, the actual shop will land near "
+                f"the ${budget_aud:.0f} budget. Tighten individual `approx_cost_aud` estimates "
+                f"proportionally (especially meat, fresh produce, and snack items)."
+            )
+        elif m <= 0.95:
+            strategy_notes.append(
+                f"BUDGET CALIBRATION: based on {n} actual receipts, this household typically "
+                f"spends about {(1-m)*100:.0f}% LESS than your AI-estimated totals — your "
+                f"estimates run high. You can be slightly more generous with portions or "
+                f"ingredients while still hitting budget."
+            )
+        else:
+            strategy_notes.append(
+                f"BUDGET CALIBRATION: based on {n} actual receipts, your estimates have been "
+                f"very close to reality (within 5%). Keep doing what you're doing."
+            )
     strategy_block = ("\n\n" + "\n".join(strategy_notes)) if strategy_notes else ""
 
     user_msg = (

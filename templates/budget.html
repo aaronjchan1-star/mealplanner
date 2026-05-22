@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Budget calibration{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Estimates vs reality</div>
+<h1>Budget <span style="font-style:italic;color:var(--terra);">calibration</span></h1>
+<p class="lede">Every receipt you log helps the planner aim its estimates better. After a few weeks of data, future plans automatically factor in your typical overshoot.</p>
+
+{% if calibration and calibration.ready %}
+  {% set m = calibration.multiplier %}
+  <div class="calibration-card">
+    <div>
+      <div class="big-number">
+        {% if m >= 1.05 %}+{{ ((m-1)*100)|round|int }}%{% elif m <= 0.95 %}-{{ ((1-m)*100)|round|int }}%{% else %}~0%{% endif %}
+      </div>
+      <div class="big-label">Typical variance from estimate</div>
+    </div>
+    <div class="calibration-prose">
+      {% if m >= 1.05 %}
+        Your shops typically run about <strong>{{ ((m-1)*100)|round|int }}%</strong> over the planner's estimate. Future plans will aim a bit lower on their raw estimates so the actual total lands at your budget.
+      {% elif m <= 0.95 %}
+        Your shops typically run about <strong>{{ ((1-m)*100)|round|int }}%</strong> under the planner's estimate. Future plans can be a bit more generous within the same budget.
+      {% else %}
+        Your shops land within <strong>5%</strong> of estimates — the planner is calibrated well for your household.
+      {% endif %}
+      <br>
+      <span class="tiny muted">Based on the last {{ calibration.n }} receipts, with recent ones weighted heavier.</span>
+    </div>
+  </div>
+{% elif calibration %}
+  <div class="card empty" style="font-style:italic;">
+    {{ calibration.n }} receipt{{ '' if calibration.n == 1 else 's' }} so far. Calibration kicks in once you have at least 3.
+  </div>
+{% else %}
+  <div class="card empty" style="font-style:italic;">No receipts recorded yet.</div>
+{% endif %}
+
+{% if receipts %}
+<div class="section-head"><h2>All receipts</h2></div>
+<div class="card">
+  <table class="receipts-table">
+    <thead>
+      <tr>
+        <th>Shopped</th>
+        <th>Plan</th>
+        <th class="num">Estimated</th>
+        <th class="num">Actual</th>
+        <th class="num">Variance</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in receipts %}
+        {% set planned = (r.planned_total_cents or 0) / 100 %}
+        {% set actual = (r.actual_total_cents or 0) / 100 %}
+        {% set delta = actual - planned %}
+        {% set pct = ((delta / planned) * 100) if planned > 0 else 0 %}
+        <tr>
+          <td>{{ r.shopped_on }}</td>
+          <td>
+            {% if r.plan_id %}
+              <a href="{{ url_for('plan_view', plan_id=r.plan_id) }}">#{{ r.plan_id }}</a>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="num">${{ "%.2f"|format(planned) }}</td>
+          <td class="num">${{ "%.2f"|format(actual) }}</td>
+          <td class="num {% if delta > 0 %}over{% elif delta < 0 %}under{% endif %}">
+            {% if planned > 0 %}{{ "%+.0f"|format(pct) }}%{% else %}—{% endif %}
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('receipt_delete', receipt_id=r.id) }}"
+                  style="margin:0;display:inline;"
+                  onsubmit="return confirm('Delete this receipt?');">
+              <button type="submit" class="ghost tiny-btn">×</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<style>
+  .calibration-card {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    padding: 1.6rem 1.8rem;
+    margin: 1.2rem 0 2rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--forest);
+    border-radius: 3px;
+    flex-wrap: wrap;
+  }
+  .calibration-card .big-number {
+    font-family: var(--serif);
+    font-size: 3rem;
+    font-weight: 600;
+    color: var(--terra);
+    line-height: 1;
+  }
+  .calibration-card .big-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin-top: .3rem;
+  }
+  .calibration-prose {
+    flex: 1;
+    min-width: 240px;
+    color: var(--ink-soft);
+  }
+  .calibration-prose strong { color: var(--forest); font-weight: 600; }
+  .receipts-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  .receipts-table th {
+    text-align: left;
+    padding: .5rem .4rem;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-soft);
+    font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  .receipts-table th.num, .receipts-table td.num { text-align: right; }
+  .receipts-table td {
+    padding: .5rem .4rem;
+    border-bottom: 1px dashed var(--line);
+  }
+  .receipts-table td.num {
+    font-family: var(--serif);
+    font-weight: 500;
+  }
+  .receipts-table td.over { color: var(--terra); }
+  .receipts-table td.under { color: var(--forest); }
+</style>
+
+{% endblock %}

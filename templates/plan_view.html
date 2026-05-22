@@ -240,6 +240,80 @@
     </tfoot>
   </table>
 </section>
+
+{% if plan.audience == "family" and plan.payload.shopping_list %}
+<section class="receipt-block">
+  {% if receipt %}
+    {% set planned = (receipt.planned_total_cents or 0) / 100 %}
+    {% set actual = (receipt.actual_total_cents or 0) / 100 %}
+    {% set delta = actual - planned %}
+    <div class="receipt-recorded">
+      <div>
+        <div class="eyebrow" style="margin-bottom:.2rem;">Actual shop recorded</div>
+        <div class="receipt-numbers">
+          <span>Estimated <strong>${{ "%.2f"|format(planned) }}</strong></span>
+          <span class="sep">·</span>
+          <span>Actual <strong>${{ "%.2f"|format(actual) }}</strong></span>
+          {% if planned > 0 %}
+            <span class="sep">·</span>
+            <span class="{% if delta > 0 %}over{% elif delta < 0 %}under{% endif %}">
+              {% if delta > 0 %}${{ "%.2f"|format(delta) }} over{% elif delta < 0 %}${{ "%.2f"|format(-delta) }} under{% else %}exact match{% endif %}
+            </span>
+          {% endif %}
+        </div>
+        {% if receipt.note %}<p class="tiny muted" style="margin:.3rem 0 0;">Note: {{ receipt.note }}</p>{% endif %}
+        <p class="tiny muted" style="margin:.3rem 0 0;">Shopped {{ receipt.shopped_on }}</p>
+      </div>
+      <form method="post" action="{{ url_for('receipt_delete', receipt_id=receipt.id) }}" style="margin:0;"
+            onsubmit="return confirm('Delete this receipt? Calibration will update.');">
+        <input type="hidden" name="plan_id" value="{{ plan.id }}">
+        <button type="submit" class="ghost tiny-btn">delete</button>
+      </form>
+    </div>
+  {% else %}
+    <form method="post" action="{{ url_for('plan_receipt', plan_id=plan.id) }}" class="receipt-form">
+      <div>
+        <div class="eyebrow" style="margin-bottom:.3rem;">After the shop</div>
+        <h3>What did this shop actually cost?</h3>
+        <p class="tiny muted">Tells the planner how close its estimates land. After a few receipts, it'll automatically tighten future estimates to match your real spending. Won't change this plan.</p>
+      </div>
+      <div class="receipt-form-row">
+        <div class="field">
+          <label for="actual_total_aud">Total (AUD)</label>
+          <input type="number" step="0.01" min="0" name="actual_total_aud" id="actual_total_aud" required>
+        </div>
+        <div class="field">
+          <label for="shopped_on">Shopped on</label>
+          <input type="date" name="shopped_on" id="shopped_on">
+        </div>
+        <div class="field" style="flex:0 0 auto;">
+          <label>&nbsp;</label>
+          <button type="submit">Save</button>
+        </div>
+      </div>
+      <details style="margin-top:.6rem;">
+        <summary class="tiny muted" style="cursor:pointer;">Add a note (optional)</summary>
+        <input type="text" name="note" placeholder="e.g. went to Aldi instead, fewer brand items"
+               style="margin-top:.4rem;">
+      </details>
+      {% if calibration and calibration.ready %}
+        {% set m = calibration.multiplier %}
+        <p class="tiny muted" style="margin-top:.8rem;">
+          Current calibration: shops typically run
+          {% if m >= 1.05 %}~{{ ((m-1)*100)|round|int }}% over{% elif m <= 0.95 %}~{{ ((1-m)*100)|round|int }}% under{% else %}within 5% of{% endif %}
+          estimates (based on {{ calibration.n }} receipts).
+          <a href="{{ url_for('budget') }}">View history →</a>
+        </p>
+      {% elif calibration %}
+        <p class="tiny muted" style="margin-top:.8rem;">
+          {{ calibration.n }} receipt{{ '' if calibration.n == 1 else 's' }} recorded so far —
+          need at least 3 before calibration kicks in.
+        </p>
+      {% endif %}
+    </form>
+  {% endif %}
+</section>
+{% endif %}
 {% endif %}
 
 <section class="danger-zone">
@@ -327,6 +401,48 @@
     font-weight: 600;
     border-bottom: 1px solid var(--line) !important;
   }
+  .receipt-block {
+    margin: 2.5rem 0 1rem;
+    padding: 1.4rem 1.5rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--forest);
+    border-radius: 3px;
+  }
+  .receipt-form h3 {
+    margin: 0 0 .4rem;
+    font-family: var(--serif);
+    font-size: 1.2rem;
+  }
+  .receipt-form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: end;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .receipt-form-row .field { margin: 0; flex: 1; min-width: 140px; }
+  .receipt-form-row .field:last-child { min-width: 0; }
+  .receipt-recorded {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .receipt-numbers {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    color: var(--ink-soft);
+  }
+  .receipt-numbers strong {
+    font-family: var(--serif);
+    color: var(--forest);
+    font-weight: 600;
+  }
+  .receipt-numbers .sep { margin: 0 .5rem; color: var(--line); }
+  .receipt-numbers .over { color: var(--terra); font-weight: 600; }
+  .receipt-numbers .under { color: var(--forest); font-weight: 600; }
   .danger-zone {
     margin: 4rem 0 1rem;
     padding: 1.2rem 1.4rem;

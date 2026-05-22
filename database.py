@@ -67,6 +67,17 @@ CREATE TABLE IF NOT EXISTS feedback (
     created_at TEXT NOT NULL,
     FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS shop_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER,
+    planned_total_cents INTEGER,      -- snapshot of the plan estimate at time of save
+    actual_total_cents INTEGER NOT NULL,
+    shopped_on TEXT NOT NULL,         -- ISO date string
+    note TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL
+);
 """
 
 
@@ -282,6 +293,88 @@ def recent_feedback(db_path: str, limit: int = 30) -> List[Dict[str, Any]]:
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# --- Shop receipts (for budget calibration) ------------------------------
+
+def add_receipt(db_path: str, plan_id: Optional[int],
+                planned_total_cents: Optional[int],
+                actual_total_cents: int,
+                shopped_on: str,
+                note: Optional[str] = None) -> int:
+    with get_conn(db_path) as c:
+        cur = c.execute(
+            """INSERT INTO shop_receipts
+               (plan_id, planned_total_cents, actual_total_cents, shopped_on, note, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (plan_id, planned_total_cents, actual_total_cents, shopped_on, note, _now()),
+        )
+        return cur.lastrowid
+
+
+def get_receipt_for_plan(db_path: str, plan_id: int) -> Optional[Dict[str, Any]]:
+    """Return the most recent receipt linked to a given plan, if any."""
+    with get_conn(db_path) as c:
+        row = c.execute(
+            """SELECT id, plan_id, planned_total_cents, actual_total_cents,
+                      shopped_on, note, created_at
+               FROM shop_receipts WHERE plan_id = ?
+               ORDER BY created_at DESC LIMIT 1""",
+            (plan_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def list_receipts(db_path: str, limit: int = 50) -> List[Dict[str, Any]]:
+    with get_conn(db_path) as c:
+        rows = c.execute(
+            """SELECT id, plan_id, planned_total_cents, actual_total_cents,
+                      shopped_on, note, created_at
+               FROM shop_receipts
+               WHERE planned_total_cents IS NOT NULL AND planned_total_cents > 0
+               ORDER BY shopped_on DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_receipt(db_path: str, receipt_id: int) -> None:
+    with get_conn(db_path) as c:
+        c.execute("DELETE FROM shop_receipts WHERE id = ?", (receipt_id,))
+
+
+def calibration_multiplier(db_path: str, max_receipts: int = 12) -> Optional[Dict[str, Any]]:
+    """Compute the rolling actual/planned ratio across recent receipts.
+
+    Uses exponential weighting so newer receipts count more — half-life ~6 shops.
+    Returns None if we don't have enough data yet (<3 receipts with planned totals).
+    """
+    receipts = list_receipts(db_path, limit=max_receipts)
+    if len(receipts) < 3:
+        return {"multiplier": None, "n": len(receipts), "ready": False}
+
+    # Newest first from list_receipts; weight i=0 the heaviest
+    weighted_sum = 0.0
+    weights = 0.0
+    HALF_LIFE = 6.0
+    for i, r in enumerate(receipts):
+        planned = (r["planned_total_cents"] or 0) / 100
+        actual = (r["actual_total_cents"] or 0) / 100
+        if planned <= 0 or actual <= 0:
+            continue
+        ratio = actual / planned
+        # Exponential weight: w = 0.5 ** (i / HALF_LIFE)
+        w = 0.5 ** (i / HALF_LIFE)
+        weighted_sum += ratio * w
+        weights += w
+    if weights == 0:
+        return {"multiplier": None, "n": len(receipts), "ready": False}
+    multiplier = weighted_sum / weights
+    return {
+        "multiplier": round(multiplier, 3),
+        "n": len(receipts),
+        "ready": True,
+    }
 
 
 # --- helpers --------------------------------------------------------------

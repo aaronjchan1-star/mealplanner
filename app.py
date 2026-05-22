@@ -83,7 +83,14 @@ def plan_view(plan_id: int):
     plan = db.get_plan(config.DB_PATH, plan_id)
     if not plan:
         abort(404)
-    return render_template("plan_view.html", plan=plan)
+    receipt = db.get_receipt_for_plan(config.DB_PATH, plan_id)
+    calibration = db.calibration_multiplier(config.DB_PATH)
+    return render_template(
+        "plan_view.html",
+        plan=plan,
+        receipt=receipt,
+        calibration=calibration,
+    )
 
 
 @app.post("/plan/<int:plan_id>/delete")
@@ -97,6 +104,51 @@ def plan_delete(plan_id: int):
     if plan["audience"] == "toddler":
         return redirect(url_for("toddler"))
     return redirect(url_for("index"))
+
+
+@app.post("/plan/<int:plan_id>/receipt")
+def plan_receipt(plan_id: int):
+    """Record an actual shop receipt for a plan. Used for budget calibration."""
+    plan = db.get_plan(config.DB_PATH, plan_id)
+    if not plan:
+        abort(404)
+    try:
+        actual = float(request.form.get("actual_total_aud", "0") or "0")
+    except ValueError:
+        actual = 0
+    if actual <= 0:
+        return redirect(url_for("plan_view", plan_id=plan_id))
+    shopped_on = (request.form.get("shopped_on") or _today_iso()).strip()
+    note = (request.form.get("note") or "").strip() or None
+    planned_cents = int(round((plan["payload"].get("estimated_total_cost_aud") or 0) * 100))
+    db.add_receipt(
+        config.DB_PATH,
+        plan_id=plan_id,
+        planned_total_cents=planned_cents,
+        actual_total_cents=int(round(actual * 100)),
+        shopped_on=shopped_on,
+        note=note,
+    )
+    log.info("recorded receipt for plan %s: planned $%.0f / actual $%.0f",
+             plan_id, planned_cents/100, actual)
+    return redirect(url_for("plan_view", plan_id=plan_id))
+
+
+@app.post("/receipt/<int:receipt_id>/delete")
+def receipt_delete(receipt_id: int):
+    plan_id = request.form.get("plan_id")
+    db.delete_receipt(config.DB_PATH, receipt_id)
+    if plan_id:
+        return redirect(url_for("plan_view", plan_id=int(plan_id)))
+    return redirect(url_for("index"))
+
+
+@app.route("/budget")
+def budget():
+    """A read-only page showing all receipts and the current calibration."""
+    receipts = db.list_receipts(config.DB_PATH, limit=50)
+    calibration = db.calibration_multiplier(config.DB_PATH)
+    return render_template("budget.html", receipts=receipts, calibration=calibration)
 
 
 @app.route("/toddler", methods=["GET", "POST"])
@@ -536,6 +588,7 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
         cooking_strategy=cooking_strategy,
         lifter_protein_target=lifter_protein_target,
         training_days=training_days,
+        calibration=db.calibration_multiplier(config.DB_PATH),
     )
     plan_id = db.save_plan(
         config.DB_PATH,
