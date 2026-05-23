@@ -3,73 +3,334 @@
 <head>
   <meta charset="utf-8">
   <title>{{ "Toddler plan" if plan.audience == "toddler" else "Meal plan" }} — {{ plan.week_start }}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: "Manrope", system-ui, sans-serif;
-      color: #1f2421;
-      max-width: 780px;
-      margin: 2rem auto;
-      padding: 1.5rem;
-      line-height: 1.5;
-      font-size: 14px;
+    /* ----------------------------------------------------------------
+       Print-friendly export — designed for B&W printing first
+       --------------------------------------------------------------- */
+    :root {
+      --ink: #000;
+      --ink-soft: #444;
+      --rule: #bbb;
+      --rule-faint: #ddd;
     }
-    h1, h2, h3 { font-family: "Fraunces", serif; line-height: 1.15; }
-    h1 { font-size: 2.4rem; margin: 0 0 .3rem; font-weight: 600; letter-spacing: -0.02em; }
-    h2 { font-size: 1.4rem; margin: 1.4rem 0 .6rem; border-bottom: 1px solid #2a3a2a33; padding-bottom: .3rem; }
-    h3 { font-size: 1.1rem; margin: 1rem 0 .3rem; font-weight: 600; }
-    .eyebrow { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.18em; color: #b85c3a; font-weight: 600; }
-    .summary { font-style: italic; color: #4a5450; max-width: 60ch; margin: .6rem 0 1.4rem; font-family: "Fraunces", serif; font-size: 1.05rem; }
-    .meta { color: #4a5450; font-size: .85rem; margin-bottom: 1.5rem; }
-    .meal { padding: .5rem 0 .8rem; border-top: 1px dashed #2a3a2a33; }
-    .meal:first-of-type { border-top: none; }
-    .slot { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.2em; color: #c89b3c; font-weight: 700; }
-    .meal-meta { font-size: .82rem; color: #4a5450; margin: .15rem 0 .5rem; }
-    .ingredients, .method { margin: .4rem 0; }
-    .ingredients { font-size: .9rem; }
-    .ingredients ul { margin: .15rem 0 .3rem 1.2rem; padding: 0; }
-    .ingredients li { margin: .05rem 0; }
-    .method ol { margin: .15rem 0 .3rem 1.2rem; padding: 0; }
-    .method li { margin: .15rem 0; font-size: .92rem; }
-    .toddler-mod, .texture { font-size: .85rem; color: #4a5450; margin: .35rem 0; font-style: italic; }
-    .shopping table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    .shopping th, .shopping td { padding: .35rem .4rem; border-bottom: 1px solid #2a3a2a22; text-align: left; }
-    .shopping th { font-size: .7rem; text-transform: uppercase; letter-spacing: 0.15em; color: #4a5450; }
-    .shopping td.cost { font-family: "Fraunces", serif; text-align: right; }
-    .shopping tfoot td { font-weight: 700; border-top: 2px solid #1f2421; }
-    .nutrition { background: #f3ebdc; padding: .8rem 1rem; margin: 1rem 0; border-left: 3px solid #2a3a2a; }
-    .nutrition h3 { margin-top: 0; }
-    .nutrition .row { margin: .3rem 0; font-size: .9rem; }
-    .nutrition .row strong { display: inline-block; min-width: 110px; color: #2a3a2a; }
-    .portions-print { margin: .6rem 0 .4rem; }
-    .portions-print > strong { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: 0.15em; color: #4a5450; margin-bottom: .25rem; }
-    .portions-print table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-    .portions-print th { text-align: left; padding: .25rem .4rem; font-size: .68rem; text-transform: uppercase; letter-spacing: 0.12em; color: #4a5450; border-bottom: 1px solid #2a3a2a22; }
-    .portions-print td { padding: .35rem .4rem; vertical-align: top; border-bottom: 1px dashed #2a3a2a18; }
-    .portions-print td.num { text-align: right; font-family: "Fraunces", serif; font-weight: 600; color: #2a3a2a; white-space: nowrap; }
-    .portions-print em { color: #4a5450; }
-    .print-hint { background: #f3ebdc; padding: .8rem 1rem; margin: 1rem 0; font-size: .85rem; border-radius: 3px; }
-    .day { page-break-inside: avoid; margin-top: 1.6rem; }
+
+    /* Strip the browser-default page margins; the @page rule below
+       defines proper paper margins instead. */
+    @page {
+      size: A4 portrait;
+      margin: 18mm 16mm 16mm;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { background: #fff; color: var(--ink); }
+    body {
+      font-family: "Manrope", "Helvetica Neue", system-ui, sans-serif;
+      max-width: 760px;
+      margin: 1.5rem auto;
+      padding: 1.5rem 1.8rem;
+      line-height: 1.5;
+      font-size: 12.5pt;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: "Fraunces", "Times New Roman", serif;
+      line-height: 1.18;
+      color: var(--ink);
+      margin: 0;
+    }
+
+    /* --- Front matter -------------------------------------------------- */
+    .eyebrow {
+      font-family: "Manrope", sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--ink);
+      font-weight: 700;
+      margin-bottom: .8rem;
+    }
+    h1 {
+      font-size: 32pt;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      margin-bottom: .35rem;
+    }
+    h1 em { font-style: italic; font-weight: 400; }
+    .summary {
+      font-family: "Fraunces", serif;
+      font-style: italic;
+      font-size: 13pt;
+      color: var(--ink-soft);
+      max-width: 60ch;
+      margin: .4rem 0 1.2rem;
+      line-height: 1.4;
+    }
+    .meta {
+      font-size: 10pt;
+      color: var(--ink-soft);
+      padding-bottom: .8rem;
+      margin-bottom: 1.4rem;
+      border-bottom: 0.4mm solid var(--ink);
+    }
+    .meta strong { color: var(--ink); font-weight: 600; }
+
+    /* --- Toddler weekly nutrition block — unboxed, prose-like ---------- */
+    .nutrition {
+      margin: 0 0 1.6rem;
+      padding: .8rem 0 .9rem;
+      border-top: 0.2mm solid var(--rule);
+      border-bottom: 0.2mm solid var(--rule);
+    }
+    .nutrition h3 {
+      font-size: 13pt;
+      font-weight: 600;
+      margin-bottom: .5rem;
+    }
+    .nutrition .row {
+      margin: .35rem 0;
+      font-size: 10pt;
+      line-height: 1.45;
+    }
+    .nutrition .row strong {
+      display: inline-block;
+      min-width: 90px;
+      font-family: "Manrope", sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-weight: 700;
+      vertical-align: top;
+    }
+
+    /* --- Day section --------------------------------------------------- */
+    .day {
+      margin-top: 1.4rem;
+      padding-top: .4rem;
+      /* Days flow naturally between pages. Each meal inside still stays
+         whole on one page (see .meal below) — this prevents recipes from
+         being sliced mid-instruction while avoiding huge empty pages when
+         a single day is just barely too tall to fit. */
+    }
+    .day:first-of-type { margin-top: .5rem; }
+    .day h2 {
+      font-size: 22pt;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      padding-bottom: .25rem;
+      border-bottom: 0.4mm solid var(--ink);
+      margin-bottom: .9rem;
+      /* If a day heading would land at the bottom of a page with nothing
+         under it, push it to the next page along with its first meal. */
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+
+    /* --- Individual meal ----------------------------------------------- */
+    .meal {
+      margin: 0 0 1rem;
+      padding: 0 0 .8rem;
+      /* Keep each recipe whole on one page. This is the rule that matters
+         — never slice a meal between its ingredients and its method. */
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .meal + .meal {
+      border-top: 0.15mm dotted var(--rule);
+      padding-top: .8rem;
+    }
+    .slot {
+      font-family: "Manrope", sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: .15rem;
+    }
+    .meal h3 {
+      font-size: 16pt;
+      font-weight: 600;
+      margin: .1rem 0 .25rem;
+      letter-spacing: -0.005em;
+    }
+    .meal-meta {
+      font-family: "Manrope", sans-serif;
+      font-size: 9.5pt;
+      color: var(--ink-soft);
+      margin: 0 0 .6rem;
+    }
+
+    /* --- Ingredients & Method side-by-side on wide enough screens ----- */
+    .recipe-body {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr;
+      gap: 1.3rem;
+      margin-top: .4rem;
+    }
+    .ingredients h4, .method h4 {
+      font-family: "Manrope", sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin: 0 0 .35rem;
+      padding-bottom: .15rem;
+      border-bottom: 0.15mm solid var(--rule);
+    }
+    .ingredients ul {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+      font-size: 10.5pt;
+      line-height: 1.5;
+    }
+    .ingredients li {
+      padding: .08rem 0;
+      padding-left: 0.9em;
+      text-indent: -0.6em;
+    }
+    .ingredients li::before {
+      content: "—";
+      margin-right: .35em;
+      color: var(--ink-soft);
+    }
+    .method ol {
+      margin: 0;
+      padding-left: 1.4em;
+      font-size: 10.5pt;
+      line-height: 1.5;
+    }
+    .method li { margin-bottom: .25rem; padding-left: .1em; }
+    .method li::marker { font-weight: 600; }
+
+    /* --- Per-meal extras (portions, toddler mods, texture) ------------ */
+    .portions-print { margin: .7rem 0 .2rem; }
+    .portions-print > strong {
+      display: block;
+      font-family: "Manrope", sans-serif;
+      font-size: 8.5pt;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: .3rem;
+      padding-bottom: .15rem;
+      border-bottom: 0.15mm solid var(--rule);
+    }
+    .portions-print table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10pt;
+    }
+    .portions-print th {
+      text-align: left;
+      padding: .2rem .3rem;
+      font-family: "Manrope", sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--ink-soft);
+      border-bottom: 0.15mm solid var(--rule);
+    }
+    .portions-print td {
+      padding: .3rem .3rem;
+      vertical-align: top;
+      border-bottom: 0.1mm dotted var(--rule-faint);
+    }
+    .portions-print tr:last-child td { border-bottom: none; }
+    .portions-print td.num {
+      text-align: right;
+      font-family: "Fraunces", serif;
+      font-weight: 600;
+      white-space: nowrap;
+      width: 4em;
+    }
+    .portions-print em {
+      color: var(--ink-soft);
+      font-size: 9.5pt;
+    }
+
+    .meal-note {
+      font-size: 9.5pt;
+      color: var(--ink-soft);
+      margin: .5rem 0 0;
+      padding: .25rem 0 .25rem .6rem;
+      border-left: 0.4mm solid var(--ink);
+      line-height: 1.45;
+    }
+    .meal-note strong {
+      font-family: "Manrope", sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--ink);
+      display: inline-block;
+      margin-right: .3em;
+    }
+
+    /* --- Print hint shown only on screen ------------------------------ */
+    .print-hint {
+      font-family: "Manrope", sans-serif;
+      font-size: 10pt;
+      color: var(--ink-soft);
+      padding: .8rem 1rem;
+      margin: 0 0 1.5rem;
+      border: 0.2mm dashed var(--rule);
+      border-radius: 2px;
+    }
+    .print-hint strong { color: var(--ink); }
+
+    /* --- Print overrides ----------------------------------------------- */
     @media print {
-      body { margin: 0; padding: 0.6rem 0.8rem; max-width: 100%; }
+      body {
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+        font-size: 11pt;
+      }
       .print-hint { display: none; }
-      h1 { font-size: 1.9rem; }
-      h2 { margin-top: 1rem; }
-      .day { page-break-inside: auto; }
+
+      /* Slightly tighter rhythm on paper */
+      .day { margin-top: 1.2rem; }
+      .day h2 { font-size: 20pt; }
+      .meal h3 { font-size: 14pt; }
+      h1 { font-size: 28pt; }
+
+      /* Keep recipes whole; drop to single column only if needed */
+      .recipe-body { gap: 1rem; }
+
+      /* Don't print link URLs in parentheses after links */
       a { color: inherit; text-decoration: none; }
+      a[href]:after { content: none !important; }
+
+      /* Avoid orphan section heads */
+      h2, h3, h4 {
+        page-break-after: avoid;
+        break-after: avoid;
+      }
+    }
+
+    /* Narrower screens — stack the two columns */
+    @media screen and (max-width: 640px) {
+      .recipe-body { grid-template-columns: 1fr; gap: .8rem; }
+      body { padding: 1.2rem 1.1rem; font-size: 11.5pt; }
     }
   </style>
 </head>
 <body>
 
 <div class="print-hint">
-  💡 To save as PDF: press <strong>Ctrl+P</strong> (or <strong>Cmd+P</strong> on Mac) and choose "Save as PDF".
+  Recipes only — for the kitchen. To save as PDF: press <strong>Ctrl+P</strong> (or <strong>Cmd+P</strong> on Mac) and choose "Save as PDF". The shopping list has its own export.
 </div>
 
 <div class="eyebrow">{{ plan.audience }} plan · week of {{ plan.week_start }}</div>
 <h1>
-  {% if plan.audience == "toddler" %}For the little one{% else %}This week's plan{% endif %}
+  {% if plan.audience == "toddler" %}For the <em>little one</em>{% else %}This week's plan{% endif %}
 </h1>
 
 {% if plan.payload.summary %}
@@ -81,24 +342,24 @@
     Estimated <strong>${{ "%.0f"|format(plan.payload.estimated_total_cost_aud) }}</strong> total
     {% if plan.budget_cents %}against ${{ "%.0f"|format(plan.budget_cents/100) }} budget{% endif %} ·
   {% endif %}
-  {{ plan.payload.days|length }} day{{ '' if plan.payload.days|length == 1 else 's' }}
+  {{ plan.payload.days|length }} day{{ '' if plan.payload.days|length == 1 else 's' }} planned
 </div>
 
 {% if plan.audience == "toddler" and plan.payload.weekly_nutrition_check %}
-<div class="nutrition">
+<section class="nutrition">
   <h3>Weekly nutrition check</h3>
   {% for key, val in plan.payload.weekly_nutrition_check.items() %}
-    <div class="row"><strong>{{ key|replace('_',' ')|capitalize }}:</strong> {{ val }}</div>
+    <div class="row"><strong>{{ key|replace('_',' ')|capitalize }}</strong> {{ val }}</div>
   {% endfor %}
-</div>
+</section>
 {% endif %}
 
 {% for day in plan.payload.days %}
 <section class="day">
   <h2>{{ day.day }}</h2>
   {% for meal in day.meals %}
-  <div class="meal">
-    <div class="slot">{{ meal.slot }}</div>
+  <article class="meal">
+    <div class="slot">{{ meal.slot|replace('_', ' ') }}</div>
     <h3>{{ meal.name }}</h3>
     <div class="meal-meta">
       {% set parts = [] %}
@@ -108,24 +369,28 @@
       {% if meal.difficulty %}{% set _ = parts.append(meal.difficulty) %}{% endif %}
       {% if meal.servings %}{% set _ = parts.append(meal.servings ~ " serves") %}{% endif %}
       {% if meal.estimated_cost_aud %}{% set _ = parts.append("$" ~ "%.2f"|format(meal.estimated_cost_aud)) %}{% endif %}
-      {{ parts|join(" · ") }}
+      {{ parts|join("  ·  ") }}
     </div>
 
-    {% if meal.ingredients %}
-    <div class="ingredients">
-      <strong>Ingredients</strong>
-      <ul>
-        {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
-      </ul>
-    </div>
-    {% endif %}
+    {% if meal.ingredients or meal.method %}
+    <div class="recipe-body">
+      {% if meal.ingredients %}
+      <div class="ingredients">
+        <h4>Ingredients</h4>
+        <ul>
+          {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
 
-    {% if meal.method %}
-    <div class="method">
-      <strong>Method</strong>
-      <ol>
-        {% for step in meal.method %}<li>{{ step }}</li>{% endfor %}
-      </ol>
+      {% if meal.method %}
+      <div class="method">
+        <h4>Method</h4>
+        <ol>
+          {% for step in meal.method %}<li>{{ step }}</li>{% endfor %}
+        </ol>
+      </div>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -154,46 +419,21 @@
     {% endif %}
 
     {% if meal.toddler_modifications %}
-      <div class="toddler-mod"><strong>For the little one:</strong> {{ meal.toddler_modifications }}</div>
+      <p class="meal-note"><strong>For the little one</strong>{{ meal.toddler_modifications }}</p>
     {% endif %}
     {% if meal.texture_notes %}
-      <div class="texture"><strong>Texture:</strong> {{ meal.texture_notes }}</div>
+      <p class="meal-note"><strong>Texture</strong>{{ meal.texture_notes }}</p>
     {% endif %}
-  </div>
+    {% if meal.daycare_lunch_packing_notes %}
+      <p class="meal-note"><strong>Daycare lunch</strong>{{ meal.daycare_lunch_packing_notes }}</p>
+    {% endif %}
+    {% if meal.storage_notes %}
+      <p class="meal-note"><strong>Storage</strong>{{ meal.storage_notes }}</p>
+    {% endif %}
+  </article>
   {% endfor %}
 </section>
 {% endfor %}
-
-{% if plan.payload.shopping_list %}
-<section class="shopping">
-  <h2>Shopping list</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Item</th><th>Quantity</th>
-        {% if plan.audience == "family" %}<th>Best at</th>{% endif %}
-        <th class="cost">Approx.</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in plan.payload.shopping_list %}
-      <tr>
-        <td>{{ item.item }}</td>
-        <td>{{ item.quantity or "" }}</td>
-        {% if plan.audience == "family" %}<td>{{ item.best_at or "" }}</td>{% endif %}
-        <td class="cost">${{ "%.2f"|format(item.approx_cost_aud or 0) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="{{ 3 if plan.audience == 'family' else 2 }}">Total</td>
-        <td class="cost">${{ "%.2f"|format(plan.payload.estimated_total_cost_aud or 0) }}</td>
-      </tr>
-    </tfoot>
-  </table>
-</section>
-{% endif %}
 
 </body>
 </html>
