@@ -200,6 +200,27 @@
       <span class="shop-count-done" data-plan-id="{{ plan.id }}">0 got</span>
     </span>
   </h2>
+
+  {% set audit = plan.payload.audit %}
+  {% if audit and (audit.total_corrected or audit.missing_ingredients) %}
+  <div class="audit-notice">
+    <div class="audit-title">⚠ The planner had a couple of slips on this plan — we've fixed what we can</div>
+    {% if audit.missing_ingredients %}
+      <div class="audit-row">
+        <strong>Missing from the shopping list</strong>: {{ audit.missing_ingredients|join(", ") }}.
+        We've added {{ "it" if audit.missing_ingredients|length == 1 else "them" }} to the bottom with an unknown price — adjust the quantity if needed.
+      </div>
+    {% endif %}
+    {% if audit.total_corrected %}
+      <div class="audit-row">
+        <strong>Total was wrong</strong>: the planner stated <s>${{ "%.2f"|format(audit.total_corrected.stated) }}</s>
+        but the line items actually sum to <strong>${{ "%.2f"|format(audit.total_corrected.actual_sum) }}</strong>.
+        We're showing the corrected sum.
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <p class="muted tiny">
     Tap an item to move it to "Already got" at the bottom. Tap again to bring it back. Your progress saves on this device.
     <button type="button" class="ghost tiny-btn" onclick="resetShoppingChecks({{ plan.id }})" style="margin-left:.5rem;">reset</button>
@@ -215,9 +236,12 @@
     </thead>
     <tbody class="shop-todo">
       {% for item in plan.payload.shopping_list %}
-      <tr class="shop-row" data-key="{{ item.item }}">
+      <tr class="shop-row{% if item.auto_added %} auto-added{% endif %}" data-key="{{ item.item }}">
         <td><input type="checkbox" class="shop-check" aria-label="{{ item.item }}"></td>
-        <td>{{ item.item }}</td>
+        <td>
+          {{ item.item }}
+          {% if item.auto_added %}<span class="auto-flag" title="The planner forgot to include this — we added it">added by us</span>{% endif %}
+        </td>
         <td class="muted">{{ item.quantity or "" }}</td>
         {% if plan.audience == "family" %}<td class="muted">{{ item.best_at or "" }}</td>{% endif %}
         <td class="cost">${{ "%.2f"|format(item.approx_cost_aud or 0) }}</td>
@@ -443,6 +467,42 @@
   .receipt-numbers .sep { margin: 0 .5rem; color: var(--line); }
   .receipt-numbers .over { color: var(--terra); font-weight: 600; }
   .receipt-numbers .under { color: var(--forest); font-weight: 600; }
+  .audit-notice {
+    margin: 1rem 0 1.2rem;
+    padding: .9rem 1.1rem;
+    background: var(--cream-2);
+    border-left: 3px solid var(--mustard);
+    border-radius: 2px;
+    font-size: .9rem;
+  }
+  .audit-title {
+    font-family: var(--serif);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: .5rem;
+  }
+  .audit-row {
+    color: var(--ink-soft);
+    margin: .3rem 0;
+    line-height: 1.5;
+  }
+  .audit-row strong { color: var(--ink); font-weight: 600; }
+  .audit-row s { color: var(--ink-soft); }
+  .auto-flag {
+    display: inline-block;
+    margin-left: .5rem;
+    padding: .1rem .45rem;
+    background: var(--mustard);
+    color: var(--ink);
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .shop-row.auto-added { background: rgba(200,155,60,0.07); }
   .danger-zone {
     margin: 4rem 0 1rem;
     padding: 1.2rem 1.4rem;

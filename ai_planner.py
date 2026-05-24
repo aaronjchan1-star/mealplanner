@@ -50,6 +50,12 @@ CRITICAL OUTPUT RULES:
 - The "days" array MUST contain one entry for every day requested, with at least one meal per day for each requested slot.
 - Every meal MUST have a populated `portion_strategies` array (at least one entry, "Standard adult"). Be realistic with the gram and kcal estimates — don't invent precise numbers, use sensible ranges based on the cuts and quantities you've specified.
 - Be realistic about Australian supermarket prices. Don't invent ingredients that aren't sold here.
+
+CRITICAL CONSISTENCY RULES (the user has been bitten by these — do NOT skip them):
+- **Every ingredient mentioned in any recipe MUST appear in the shopping_list**, with the exception of: salt, pepper, water, ice, and ingredients you can see in the household's pantry list. Even small quantities like "30g frozen peas" or "1 tsp tomato paste" must be listed if not in pantry — they're things the shopper needs to buy. Before submitting, mentally walk through every recipe and confirm each ingredient is in the shopping list.
+- **The `estimated_total_cost_aud` MUST equal the sum of `approx_cost_aud` across the shopping_list to within $0.50**. Do the addition before submitting. If the sum is $50.60, write 50.60, not 39.80.
+- These two consistency checks fail more often than you'd expect. The user has explicitly asked for the planner to be careful about them. Spend a few extra tokens checking — it matters more than the prose summary.
+
 - Always submit your final plan via the submit_meal_plan tool. Never respond with prose."""
 
 
@@ -93,7 +99,12 @@ OUTPUT:
 - Always submit via the submit_toddler_plan tool, never prose.
 - Summary: ONE sentence, max 25 words. Nutritional reasoning goes in `weekly_nutrition_check`.
 - The `days` array must contain ONE entry for every day requested.
-- Each day's `meals` array contains ONLY the slots requested — no extras."""
+- Each day's `meals` array contains ONLY the slots requested — no extras.
+
+CRITICAL CONSISTENCY RULES (the user has been bitten by these — do NOT skip them):
+- **Every ingredient mentioned in any recipe MUST appear in the shopping_list**, with the exception of: salt, pepper, water, ice, and ingredients in the household's pantry list. Even small quantities (30g frozen peas, 1 tsp tomato paste) need to be on the list — they're things the shopper has to buy. Walk through every recipe before submitting and confirm.
+- **The `estimated_total_cost_aud` MUST equal the sum of `approx_cost_aud` across the shopping_list to within $0.50**. Do the addition before submitting. Don't quote the household's stated budget as the total — quote the actual sum of items.
+- These two consistency checks fail more often than you'd expect. Spend a few extra tokens checking."""
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +417,139 @@ def _validate_plan_or_raise(plan: Dict[str, Any], expected_days: int) -> None:
         )
 
 
+# Ingredients the model can safely assume the household has on hand.
+# We don't flag missing-from-shopping-list for these.
+_ALWAYS_PANTRY = {
+    "salt", "pepper", "black pepper", "white pepper", "sea salt",
+    "water", "ice", "tap water",
+    "olive oil",  # near-universal — and listed in pantry by default for most households
+    "vegetable oil", "cooking oil", "neutral oil", "canola oil", "sunflower oil",
+    "cooking spray",
+}
+
+
+def _normalize_ingredient(text: str) -> str:
+    """Lower-case, strip parenthetical quantities, drop common prefixes
+    like 'fresh', 'finely diced', etc. Used for loose matching."""
+    import re
+    s = (text or "").lower()
+    # strip parenthetical content like "(80g, finely diced)"
+    s = re.sub(r"\([^)]*\)", "", s)
+    # strip leading quantities/units like "30g " or "1 tsp " or "2 cloves "
+    s = re.sub(
+        r"^\s*(\d+(?:\.\d+)?\s*(?:g|kg|ml|l|tsp|tbsp|cup|cups|cloves?|cans?|tins?|bunches?|heads?|pieces?)?)\s*",
+        "", s,
+    )
+    # drop common descriptors
+    for w in ["fresh", "frozen", "dried", "raw", "cooked", "finely", "diced", "minced",
+              "grated", "chopped", "sliced", "whole", "free-range", "organic"]:
+        s = s.replace(w, "")
+    s = re.sub(r"\s+", " ", s).strip(" ,.-:")
+    return s
+
+
+def _ingredient_matches_shopping(ing_norm: str, shopping_norms: List[str]) -> bool:
+    """Loose match — true if any shopping item is a substring of the ingredient,
+    or vice versa. Catches 'frozen peas' vs 'peas', 'beef mince' vs 'minced beef'."""
+    if not ing_norm:
+        return True
+    for s in shopping_norms:
+        if not s:
+            continue
+        if ing_norm in s or s in ing_norm:
+            return True
+        # Also check word overlap — "minced beef" vs "beef mince"
+        ing_words = set(ing_norm.split())
+        s_words = set(s.split())
+        # Drop very-short tokens to avoid spurious matches on 1-2 letter words
+        ing_words = {w for w in ing_words if len(w) > 2}
+        s_words = {w for w in s_words if len(w) > 2}
+        if ing_words and s_words and len(ing_words & s_words) >= max(1, min(len(ing_words), len(s_words)) - 0):
+            return True
+    return False
+
+
+def _audit_and_fix_plan(
+    plan: Dict[str, Any],
+    pantry: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """After the model returns, sanity-check two known failure modes:
+
+    1. `estimated_total_cost_aud` doesn't equal the sum of `approx_cost_aud` on the
+       shopping list. We trust the line items and override the stated total.
+
+    2. Ingredients mentioned in recipes are missing from the shopping list. We
+       record these as warnings — and append a stub line for each missing item
+       so the user sees them on their shopping list (with price 0, flagged).
+
+    Mutates the plan dict in place and attaches an `audit` block with what was
+    fixed. Returns the same plan dict for convenience.
+    """
+    audit = {"total_corrected": None, "missing_ingredients": []}
+
+    shopping = plan.get("shopping_list") or []
+
+    # ---- Fix 1: re-sum the line items ----
+    line_sum = sum((item.get("approx_cost_aud") or 0) for item in shopping)
+    stated = plan.get("estimated_total_cost_aud") or 0
+    if line_sum > 0 and abs(line_sum - stated) > 0.50:
+        log.warning(
+            "Plan total mismatch: stated $%.2f, line items sum to $%.2f. Overriding.",
+            stated, line_sum,
+        )
+        audit["total_corrected"] = {
+            "stated": round(stated, 2),
+            "actual_sum": round(line_sum, 2),
+        }
+        plan["estimated_total_cost_aud"] = round(line_sum, 2)
+
+    # ---- Fix 2: detect ingredients missing from shopping list ----
+    pantry_norms = [_normalize_ingredient(p.get("name", "")) for p in (pantry or [])]
+    shopping_norms = [_normalize_ingredient(s.get("item", "")) for s in shopping]
+    # Add pantry items to the "covered" set so we don't flag them
+    covered_norms = shopping_norms + pantry_norms
+
+    # Walk all recipe ingredients across all meals
+    missing_seen = set()
+    for day in (plan.get("days") or []):
+        for meal in (day.get("meals") or []):
+            for ing in (meal.get("ingredients") or []):
+                norm = _normalize_ingredient(ing)
+                if not norm:
+                    continue
+                # Skip always-pantry items
+                if any(p in norm for p in _ALWAYS_PANTRY):
+                    continue
+                if not _ingredient_matches_shopping(norm, covered_norms):
+                    # Use the original ingredient string for the warning,
+                    # but de-dupe on the normalized form
+                    if norm not in missing_seen:
+                        missing_seen.add(norm)
+                        audit["missing_ingredients"].append(ing)
+
+    # Add stub shopping-list entries for missing items so users see them at
+    # checkout. Mark them with a zero price and a known-bad flag so the UI
+    # can call them out.
+    if audit["missing_ingredients"]:
+        log.warning(
+            "Plan has %d ingredient(s) missing from shopping list: %s",
+            len(audit["missing_ingredients"]),
+            audit["missing_ingredients"][:5],
+        )
+        for ing in audit["missing_ingredients"]:
+            shopping.append({
+                "item": ing,
+                "quantity": "(check quantity)",
+                "best_at": "",
+                "approx_cost_aud": 0,
+                "auto_added": True,
+            })
+        plan["shopping_list"] = shopping
+
+    plan["audit"] = audit
+    return plan
+
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
@@ -551,6 +695,7 @@ def build_family_plan(
     plan = _extract_tool_input(msg, "submit_meal_plan")
     _truncate_summary(plan)
     _validate_plan_or_raise(plan, expected_days=days)
+    _audit_and_fix_plan(plan, pantry)
     return plan
 
 
@@ -702,6 +847,7 @@ def build_toddler_plan(
     plan = _extract_tool_input(msg, "submit_toddler_plan")
     _truncate_summary(plan)
     _validate_plan_or_raise(plan, expected_days=days)
+    _audit_and_fix_plan(plan, pantry)
     return plan
 
 
