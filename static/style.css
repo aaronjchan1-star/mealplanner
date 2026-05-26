@@ -421,6 +421,17 @@ button.tiny-btn { padding: .35rem .7rem; font-size: .8rem; }
   font-family: var(--serif);
 }
 
+.batch-status {
+  background: var(--cream-2);
+  border-left: 3px solid var(--forest);
+  padding: .65rem 1rem;
+  font-size: .92rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+  border-radius: 2px;
+}
+.batch-status strong { color: var(--ink); font-weight: 600; }
+
 .nutrition-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;
   margin: 1.2rem 0;

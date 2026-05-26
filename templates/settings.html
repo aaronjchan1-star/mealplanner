@@ -85,6 +85,33 @@
     </div>
   </div>
 
+  <h2 style="margin-top:1.6rem;">Batch cooking</h2>
+  <p class="muted tiny">When on, most dinners are cooked together on prep day (Sunday by default) and reheated through the week. 2-3 dinners stay fresh-cooked for variety. Toddler food gets stricter shelf-life rules — anything not eaten by Monday gets frozen on prep day.</p>
+  <div class="field">
+    <label>
+      <input type="checkbox" name="batch_mode_default" value="1"
+             {% if prefs.batch_mode_default is not defined or prefs.batch_mode_default %}checked{% endif %}>
+      Use batch-cook mode by default
+    </label>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="prep_day">Prep day</label>
+      <select name="prep_day" id="prep_day">
+        {% set pd = prefs.prep_day or 'Sunday' %}
+        {% for d in ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'] %}
+          <option value="{{ d }}" {% if d == pd %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="fresh_cook_nights">Fresh-cook nights per week</label>
+      <input type="number" name="fresh_cook_nights" id="fresh_cook_nights"
+             min="0" max="5" value="{{ prefs.fresh_cook_nights or 2 }}">
+      <p class="tiny muted" style="margin-top:.2rem;">Variety nights — 0 means all batch, 5 means mostly fresh.</p>
+    </div>
+  </div>
+
   <h2 style="margin-top:1.6rem;">Children</h2>
   <p class="muted tiny">Add a row per child. Date of birth means the age stays current automatically — you don't have to come back and update it every month.</p>
 

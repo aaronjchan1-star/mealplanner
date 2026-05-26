@@ -72,6 +72,26 @@
     </div>
   </div>
 
+  {% if prefs.batch_mode_default is not defined or prefs.batch_mode_default %}
+  <div class="field">
+    <label>This week's cooking style</label>
+    <div class="batch-status">
+      <strong>Batch-cook mode is on</strong> (prep day: {{ prefs.prep_day or 'Sunday' }} ·
+      {{ prefs.fresh_cook_nights or 2 }} fresh-cook night{{ '' if (prefs.fresh_cook_nights or 2) == 1 else 's' }}).
+      Most dinners will be cooked together on prep day and reheated; a couple stay fresh for variety.
+    </div>
+    <div class="checkboxes" style="margin-top:.6rem;">
+      <label>
+        <input type="checkbox" name="fresh_cook_week" value="1">
+        Cook fresh this week instead (no batching, just this once)
+      </label>
+    </div>
+    <p class="tiny muted" style="margin-top:.3rem;">
+      Change the default behaviour in <a href="{{ url_for('settings') }}">Settings</a>.
+    </p>
+  </div>
+  {% endif %}
+
   <div class="field">
     <label>Cook-ahead strategy</label>
     <div class="checkboxes">

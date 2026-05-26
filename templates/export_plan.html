@@ -106,6 +106,48 @@
       vertical-align: top;
     }
 
+    /* --- Prep session (batch mode) ------------------------------------- */
+    .prep-print {
+      margin: 0 0 1.8rem;
+      padding: .8rem 0 .9rem;
+      border-top: 0.4mm solid var(--ink);
+      border-bottom: 0.4mm solid var(--ink);
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .prep-print h3 {
+      font-size: 14pt;
+      font-weight: 700;
+      margin-bottom: .35rem;
+    }
+    .prep-print-meta {
+      font-size: 9.5pt;
+      color: var(--ink-soft);
+      margin: 0 0 .8rem;
+    }
+    .prep-print-block {
+      margin: .7rem 0;
+    }
+    .prep-print-block > strong {
+      display: block;
+      font-family: "Manrope", sans-serif;
+      font-size: 8pt;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: .3rem;
+    }
+    .prep-print-block ol,
+    .prep-print-block ul {
+      margin: 0;
+      padding-left: 1.4em;
+      font-size: 10pt;
+      line-height: 1.5;
+    }
+    .prep-print-block li {
+      margin-bottom: .2rem;
+    }
+
     /* --- Day section --------------------------------------------------- */
     .day {
       margin-top: 1.4rem;
@@ -354,6 +396,31 @@
 </section>
 {% endif %}
 
+{% if plan.payload.sunday_prep_session %}
+{% set prep = plan.payload.sunday_prep_session %}
+<section class="prep-print">
+  <h3>{{ plan.payload.prep_day or 'Sunday' }} prep — one session for the week</h3>
+  <div class="prep-print-meta">
+    {% if prep.active_minutes %}{{ prep.active_minutes }} min active{% endif %}{% if prep.active_minutes and prep.total_minutes %} · {% endif %}{% if prep.total_minutes %}{{ prep.total_minutes }} min total{% endif %}
+  </div>
+  {% if prep.steps %}
+  <div class="prep-print-block">
+    <strong>The session</strong>
+    <ol>{% for step in prep.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+  </div>
+  {% endif %}
+  {% if prep.portioning_and_storage %}
+  <div class="prep-print-block">
+    <strong>Portion &amp; store</strong>
+    <ul>{% for line in prep.portioning_and_storage %}<li>{{ line }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if prep.containers_needed %}
+  <p class="prep-print-meta"><em>Containers:</em> {{ prep.containers_needed }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% for day in plan.payload.days %}
 <section class="day">
   <h2>{{ day.day }}</h2>
@@ -429,6 +496,9 @@
     {% endif %}
     {% if meal.storage_notes %}
       <p class="meal-note"><strong>Storage</strong>{{ meal.storage_notes }}</p>
+    {% endif %}
+    {% if meal.reheat_instructions %}
+      <p class="meal-note"><strong>On the night</strong>{{ meal.reheat_instructions }}</p>
     {% endif %}
   </article>
   {% endfor %}

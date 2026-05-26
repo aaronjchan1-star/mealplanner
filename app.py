@@ -245,6 +245,16 @@ def settings():
             d for d in request.form.getlist("default_training_days")
             if d in {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}
         ]
+        # Batch-cook settings
+        prefs["batch_mode_default"] = request.form.get("batch_mode_default") == "1"
+        pd = request.form.get("prep_day", "Sunday").strip()
+        if pd in {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}:
+            prefs["prep_day"] = pd
+        try:
+            fcn = int(request.form.get("fresh_cook_nights", "2") or "2")
+            prefs["fresh_cook_nights"] = max(0, min(5, fcn))
+        except ValueError:
+            prefs["fresh_cook_nights"] = 2
         # Children: rebuild list from indexed form fields. We now prefer DOB
         # (ISO date string) and compute age_months on the fly, but we keep
         # accepting age_months for back-compat / manual override.
@@ -569,6 +579,22 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
     training_days = [d for d in form.getlist("training_days") if d in
                      {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}]
 
+    # Batch cook mode: default ON. The form has a "cook fresh this week" checkbox
+    # that, when ticked, turns it OFF for this plan.
+    batch_default = prefs.get("batch_mode_default", True)
+    batch_mode = batch_default and (form.get("fresh_cook_week") != "1")
+    prep_day = form.get("prep_day", "").strip() or prefs.get("prep_day", "Sunday")
+    if prep_day not in {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}:
+        prep_day = "Sunday"
+    fresh_cook_nights = prefs.get("fresh_cook_nights", 2)
+    try:
+        raw_fcn = form.get("fresh_cook_nights", "").strip()
+        if raw_fcn:
+            fresh_cook_nights = max(0, min(5, int(raw_fcn)))
+    except ValueError:
+        pass
+    has_toddler = bool(prefs.get("children"))
+
     plan = ai_planner.build_family_plan(
         api_key=config.ANTHROPIC_API_KEY,
         model=config.MODEL,
@@ -589,6 +615,10 @@ def _build_family_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]:
         lifter_protein_target=lifter_protein_target,
         training_days=training_days,
         calibration=db.calibration_multiplier(config.DB_PATH),
+        batch_mode=batch_mode,
+        prep_day=prep_day,
+        fresh_cook_nights=fresh_cook_nights,
+        has_toddler=has_toddler,
     )
     plan_id = db.save_plan(
         config.DB_PATH,
@@ -624,6 +654,12 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
     daycare_days = [d for d in form.getlist("daycare_days") if d in
                     {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday"}]
 
+    batch_default = prefs.get("batch_mode_default", True)
+    batch_mode = batch_default and (form.get("fresh_cook_week") != "1")
+    prep_day = form.get("prep_day", "").strip() or prefs.get("prep_day", "Sunday")
+    if prep_day not in {"Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"}:
+        prep_day = "Sunday"
+
     plan = ai_planner.build_toddler_plan(
         api_key=config.ANTHROPIC_API_KEY,
         model=config.MODEL,
@@ -640,6 +676,8 @@ def _build_toddler_plan_from_form(form, prefs: Dict[str, Any]) -> Dict[str, Any]
         eats_with_family=eats_with_family,
         daycare_lunch_reuse=daycare_lunch_reuse,
         daycare_days=daycare_days,
+        batch_mode=batch_mode,
+        prep_day=prep_day,
     )
     plan_id = db.save_plan(
         config.DB_PATH,
@@ -714,6 +752,10 @@ def _run_scheduled_plans():
                     meal_slots=params.get("meal_slots", ["dinner"]),
                     cuisines_loved=params.get("cuisines_loved", []),
                     diet_notes=params.get("diet_notes", ""),
+                    batch_mode=prefs.get("batch_mode_default", True),
+                    prep_day=prefs.get("prep_day", "Sunday"),
+                    fresh_cook_nights=prefs.get("fresh_cook_nights", 2),
+                    has_toddler=bool(prefs.get("children")),
                 )
                 db.save_plan(config.DB_PATH, today, "family", plan,
                              int(round(params.get("budget_aud", 0) * 100)))
@@ -737,6 +779,8 @@ def _run_scheduled_plans():
                     eats_with_family=params.get("eats_with_family", False),
                     daycare_lunch_reuse=params.get("daycare_lunch_reuse", False),
                     daycare_days=params.get("daycare_days", None),
+                    batch_mode=prefs.get("batch_mode_default", True),
+                    prep_day=prefs.get("prep_day", "Sunday"),
                 )
                 db.save_plan(config.DB_PATH, today, "toddler", plan,
                              int(round(params.get("budget_aud", 0) * 100)))

@@ -36,6 +36,44 @@
 </div>
 {% endif %}
 
+{% if plan.payload.sunday_prep_session %}
+{% set prep = plan.payload.sunday_prep_session %}
+<section class="prep-session">
+  <div class="prep-head">
+    <div>
+      <div class="eyebrow" style="margin-bottom:.3rem;">{{ plan.payload.prep_day or 'Sunday' }} prep — one session, the week handled</div>
+      <h2>The {{ plan.payload.prep_day or 'Sunday' }} cook</h2>
+    </div>
+    <div class="prep-meta">
+      {% if prep.active_minutes %}<span><strong>{{ prep.active_minutes }}</strong> min active</span>{% endif %}
+      {% if prep.total_minutes %}<span><strong>{{ prep.total_minutes }}</strong> min total</span>{% endif %}
+    </div>
+  </div>
+
+  {% if prep.steps %}
+  <div class="prep-section">
+    <h3>The session</h3>
+    <ol class="prep-steps">
+      {% for step in prep.steps %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+
+  {% if prep.portioning_and_storage %}
+  <div class="prep-section">
+    <h3>Portion &amp; store</h3>
+    <ul class="prep-storage">
+      {% for line in prep.portioning_and_storage %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if prep.containers_needed %}
+  <p class="tiny muted" style="margin-top:.6rem;"><em>Containers:</em> {{ prep.containers_needed }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if plan.audience == "toddler" %}
   {% set iron_counts = {'heme_rich': 0, 'non_heme_with_c': 0, 'non_heme_no_c': 0, 'low_iron': 0, 'unknown': 0} %}
   {% set total_meals = namespace(n=0) %}
@@ -104,6 +142,8 @@
       <h3>{{ meal.name }}</h3>
       <div class="tags">
         {% if meal.cuisine %}<span class="tag cuisine">{{ meal.cuisine }}</span>{% endif %}
+        {% if meal.prep_phase == 'batch' %}<span class="tag prep-batch">batch-cooked {{ plan.payload.prep_day or 'Sun' }}</span>{% endif %}
+        {% if meal.prep_phase == 'fresh' %}<span class="tag prep-fresh">cooked fresh tonight</span>{% endif %}
         {% if meal.active_minutes %}<span class="tag">{{ meal.active_minutes }} min active</span>{% endif %}
         {% if meal.total_minutes %}<span class="tag">{{ meal.total_minutes }} min total</span>{% endif %}
         {% if meal.difficulty %}<span class="tag">{{ meal.difficulty }}</span>{% endif %}
@@ -130,7 +170,10 @@
       <p class="muted tiny daycare-note"><em>📦 Daycare lunch tomorrow:</em> {{ meal.daycare_lunch_packing_notes }}</p>
       {% endif %}
       {% if meal.storage_notes %}
-      <p class="muted tiny"><em>Storage:</em> {{ meal.storage_notes }}</p>
+      <div class="reheat-line"><strong>Storage</strong>{{ meal.storage_notes }}</div>
+      {% endif %}
+      {% if meal.reheat_instructions %}
+      <div class="reheat-line"><strong>On the night</strong>{{ meal.reheat_instructions }}</div>
       {% endif %}
       {% if meal.texture_notes %}
       <p class="muted tiny"><em>Texture:</em> {{ meal.texture_notes }}</p>
@@ -202,7 +245,7 @@
   </h2>
 
   {% set audit = plan.payload.audit %}
-  {% if audit and (audit.total_corrected or audit.missing_ingredients) %}
+  {% if audit and (audit.total_corrected or audit.missing_ingredients or audit.batch_warnings) %}
   <div class="audit-notice">
     <div class="audit-title">⚠ The planner had a couple of slips on this plan — we've fixed what we can</div>
     {% if audit.missing_ingredients %}
@@ -216,6 +259,14 @@
         <strong>Total was wrong</strong>: the planner stated <s>${{ "%.2f"|format(audit.total_corrected.stated) }}</s>
         but the line items actually sum to <strong>${{ "%.2f"|format(audit.total_corrected.actual_sum) }}</strong>.
         We're showing the corrected sum.
+      </div>
+    {% endif %}
+    {% if audit.batch_warnings %}
+      <div class="audit-row">
+        <strong>Batch-mode gaps</strong>: the planner skipped some prep details we'd normally expect. You may need to use your judgement on:
+        <ul style="margin:.3rem 0 0 0; padding-left:1.2em;">
+          {% for w in audit.batch_warnings %}<li>{{ w }}</li>{% endfor %}
+        </ul>
       </div>
     {% endif %}
   </div>
@@ -241,6 +292,9 @@
         <td>
           {{ item.item }}
           {% if item.auto_added %}<span class="auto-flag" title="The planner forgot to include this — we added it">added by us</span>{% endif %}
+          {% if item.prep_destiny == 'batch_sunday' %}<span class="prep-tag prep-tag-batch" title="Cooked together on prep day">cook {{ (plan.payload.prep_day or 'Sun')[:3] }}</span>
+          {% elif item.prep_destiny and item.prep_destiny.startswith('fresh_for_') %}{% set day_short = item.prep_destiny.replace('fresh_for_','')|capitalize %}<span class="prep-tag prep-tag-fresh" title="Bought to be cooked fresh on this day">fresh for {{ day_short }}</span>
+          {% endif %}
         </td>
         <td class="muted">{{ item.quantity or "" }}</td>
         {% if plan.audience == "family" %}<td class="muted">{{ item.best_at or "" }}</td>{% endif %}
@@ -502,6 +556,19 @@
     border-radius: 999px;
     vertical-align: middle;
   }
+  .prep-tag {
+    display: inline-block;
+    margin-left: .5rem;
+    padding: .1rem .55rem;
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .prep-tag-batch { background: #d6c7a2; color: var(--ink); }
+  .prep-tag-fresh { background: var(--ink); color: var(--cream); }
   .shop-row.auto-added { background: rgba(200,155,60,0.07); }
   .danger-zone {
     margin: 4rem 0 1rem;
@@ -573,6 +640,115 @@
   .tag.iron-heme { background: var(--terra); color: var(--cream); }
   .tag.iron-plant-c { background: var(--forest); color: var(--cream); }
   .tag.iron-plant { background: var(--cream-2); color: var(--ink-soft); }
+  .tag.prep-batch { background: #d6c7a2; color: var(--ink); }
+  .tag.prep-fresh { background: var(--ink); color: var(--cream); }
+
+  .prep-session {
+    background: var(--cream-2);
+    border-left: 4px solid var(--forest);
+    border-radius: 2px;
+    padding: 1.3rem 1.5rem;
+    margin: 1.4rem 0 2.4rem;
+  }
+  .prep-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    padding-bottom: .8rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .prep-head h2 {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .prep-meta {
+    display: flex;
+    gap: 1.4rem;
+    font-size: .82rem;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .prep-meta strong {
+    font-family: var(--serif);
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--forest);
+    display: block;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height: 1;
+  }
+  .prep-section {
+    margin-top: 1rem;
+  }
+  .prep-section h3 {
+    font-family: var(--sans);
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: var(--ink-soft);
+    margin: 0 0 .55rem;
+  }
+  .prep-steps {
+    margin: 0;
+    padding-left: 1.4em;
+    font-size: .95rem;
+    line-height: 1.55;
+    counter-reset: prep-step;
+    list-style: none;
+  }
+  .prep-steps li {
+    counter-increment: prep-step;
+    position: relative;
+    padding-left: 1.6em;
+    margin-bottom: .35rem;
+  }
+  .prep-steps li::before {
+    content: counter(prep-step);
+    position: absolute;
+    left: -.6em;
+    top: 0;
+    font-family: var(--serif);
+    font-weight: 600;
+    color: var(--terra);
+    width: 1.4em;
+  }
+  .prep-storage {
+    margin: 0;
+    padding-left: 1.2em;
+    font-size: .95rem;
+    line-height: 1.55;
+  }
+  .prep-storage li {
+    margin-bottom: .35rem;
+    padding-left: .2em;
+  }
+  .reheat-line {
+    background: var(--paper);
+    border: 1px dashed var(--line);
+    padding: .55rem .8rem;
+    margin: .6rem 0;
+    border-radius: 2px;
+    font-size: .88rem;
+    line-height: 1.45;
+  }
+  .reheat-line strong {
+    font-family: var(--sans);
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+    color: var(--terra);
+    display: inline-block;
+    margin-right: .35em;
+  }
   .daycare-note {
     background: var(--cream-2);
     padding: .4rem .65rem !important;

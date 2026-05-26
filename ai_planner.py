@@ -43,7 +43,36 @@ You produce structured weekly meal plans by calling the submit_meal_plan tool. Y
 10. Prefer ingredients available at the household's nearby supermarkets (Woolworths, Coles, Aldi, IGA in Australia). Group the shopping list so one trip covers it.
 11. Vary cuisines across the week so the household doesn't get bored, but stay inside the cuisines they enjoy.
 12. Only use cooking methods that match the household's available appliances. If they don't have an oven, don't roast. If they have an air fryer, lean into it where appropriate.
-13. When the user requests batch cooking or freezer-friendly meals, design dinners that are eaten across multiple nights rather than a single sitting. Use the meal `name` to make this explicit (e.g. "Slow-cooker beef ragu — Sunday batch (also serves Mon & Tue)"). Use `storage_notes` to record fridge/freezer life and reheat instructions.
+13. **Batch-cook mode (when enabled).** When the user has batch mode on, the household cooks the majority of dinners in one prep session on prep day (Sunday by default), then reheats through the week. This changes how you design the plan:
+
+    a. **2-3 dinners per week are "fresh-cooked" on the night** — these are the variety nights, typically pan-fried, stir-fried, seared, or otherwise things that don't reheat well. The remaining nights are "batch-cooked" — designed to be cooked once on prep day in bulk, portioned into containers, and reheated.
+
+    b. **Use the `prep_phase` field on every meal:** set to "batch" for meals cooked on prep day, "fresh" for meals cooked entirely on the night. There should be roughly 4-5 "batch" dinners and 2-3 "fresh" dinners per 7-day week, adjusted proportionally for shorter weeks.
+
+    c. **Lean batch-cooked nights toward dishes that reheat well**: ragus, bolognese, curries, stews, casseroles, slow-cooked meats, shepherd's pie, mince dishes, soups, rice-based bakes. Avoid stir-fries, pan-fried steaks, schnitzel, anything crispy, or anything with cream sauce as batch dinners — those are the fresh-cook options.
+
+    d. **For batch meals: cook the protein on prep day, but vegetables and sides stay fresh.** Don't batch-cook broccoli on Sunday and reheat it Wednesday — it gets soggy. The reheat instructions on the night should be "microwave the meat/sauce portion 2-3 min, steam fresh veg 4 min, plate".
+
+    e. **EVERY batch meal MUST include detailed storage_notes** with three pieces: (1) which container/portion goes where on prep day (fridge vs freezer), (2) how long it keeps in each state, (3) reheat instructions including method and time.
+
+    f. **Always produce a `sunday_prep_session` block at the plan level** when batch mode is on. This is the combined Sunday cooking workflow that produces all batch meals at once — not 4 separate recipes laid on top of each other, but a single coherent 1.5-2 hour session with steps that interleave (e.g. "preheat oven 180°C; while it heats, brown the mince; put chicken in oven; while chicken roasts, finish ragu..."). List the active time, total time, and the final portioning/labelling instructions.
+
+    g. **CRITICAL TODDLER SAFETY** — toddlers under 3 have lower stomach acid and less developed gut flora. Their shelf-life rules are stricter than adults':
+
+       | Storage | Adult cooked meat | TODDLER cooked meat |
+       |---|---|---|
+       | Fridge, ready to eat | up to 3 days | up to 2 days |
+       | Freezer, frozen on prep day | up to 3 months | up to 1 month |
+       | Reheats | once | once only, never re-frozen |
+       | Cooked fish in fridge | up to 2 days | up to 1 day or freeze |
+
+       The hard rule: **ANY toddler portion of batch-cooked meat that won't be eaten by Monday MUST be frozen on prep day** (Sunday), not left in the fridge. Adult portions can sit in the fridge through Wednesday; toddler portions cannot. So a single batch cook produces two storage streams: adult portions in fridge for Mon/Tue/Wed + freezer for Thu/Fri, and toddler portions all going to freezer except the very first one or two days.
+
+       On fresh-cook nights where the adults are eating something that's not toddler-safe (e.g. stir-fried prawns, rare steak), the toddler eats a thawed batch portion from prep day's cooking — NEVER raw-from-fridge meat that's been sitting since prep day. Every toddler meat portion must be either (a) cooked fresh that day, or (b) frozen on prep day and thawed for that day.
+
+    h. **The shopping list must mark each meat item with its prep destiny**: include a `prep_destiny` field per shopping item set to one of: "batch_sunday" (cooked on prep day with everything else), "fresh_for_<day>" (bought to be cooked fresh on a specific day — ideally late in the week if a top-up shop happens, or kept very cold), or "pantry" (shelf-stable, no special handling).
+
+14. When batch mode is OFF, design meals normally (cooked fresh on the night), and skip the prep_phase / sunday_prep_session / prep_destiny fields.
 
 CRITICAL OUTPUT RULES:
 - The "summary" field MUST be a single short sentence, maximum 25 words. Do NOT describe the plan in detail there — that detail belongs in the individual meal entries.
@@ -95,6 +124,24 @@ SAFETY (HARD CONSTRAINTS):
 - No raw or undercooked egg, meat, seafood
 - Texture matches the age band you're given
 
+TODDLER FOOD-SAFETY SHELF LIFE (STRICTER THAN ADULTS):
+When the household runs batch-cook mode, the toddler's portions need stricter handling than the adults'. Toddlers under 3 have lower stomach acid and less developed gut flora.
+
+  | Storage | Toddler cooked meat | Toddler cooked fish |
+  |---|---|---|
+  | Fridge, cooked | up to 2 days | up to 1 day |
+  | Freezer, frozen on prep day | up to 1 month | up to 1 month |
+  | Re-freezing thawed meat | NEVER | NEVER |
+  | Reheats | once only | once only |
+
+HARD RULE FOR BATCH MODE: any toddler portion that isn't eaten by the day after prep day MUST be frozen on prep day. Record this explicitly in each meal's `texture_notes` or `daycare_lunch_packing_notes`. On fresh-cook adult nights where the toddler can't share, the toddler eats a thawed batch portion from prep day — NEVER raw-from-fridge meat that's been sitting since prep day.
+
+BATCH MODE (when enabled):
+- You will be told whether the household runs batch mode, and what prep_day is.
+- If batch mode is on AND eats_with_family is on, defer to the family plan's batch structure — the toddler's dinners borrow from family batch portions, frozen on prep day where needed.
+- If batch mode is on AND eats_with_family is off, design toddler dinners so the proteins are cooked together on prep_day and either fridge-stored (up to 2 days) or frozen in single-portion containers (up to 1 month). Use `texture_notes` to record the prep-day storage AND the reheat method ("thaw overnight in fridge, microwave 60 sec medium, stir, check temperature, serve").
+- Cooked vegetables for the toddler are best made fresh on the night (steamed broccoli, blanched carrot sticks) — these are quick enough that batch isn't needed.
+
 OUTPUT:
 - Always submit via the submit_toddler_plan tool, never prose.
 - Summary: ONE sentence, max 25 words. Nutritional reasoning goes in `weekly_nutrition_check`.
@@ -127,6 +174,34 @@ FAMILY_TOOL_SCHEMA = {
                 "type": "number",
                 "description": "Sum of all meal costs in AUD.",
             },
+            "sunday_prep_session": {
+                "type": "object",
+                "description": "Required when batch mode is on. The unified Sunday prep workflow that produces all batch meals at once — one coherent session, not many separate recipes stacked. Omit entirely when batch mode is off.",
+                "properties": {
+                    "active_minutes": {
+                        "type": "integer",
+                        "description": "Hands-on time for the whole session.",
+                    },
+                    "total_minutes": {
+                        "type": "integer",
+                        "description": "End-to-end time including oven/simmer time.",
+                    },
+                    "steps": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Interleaved steps that handle multiple meals in parallel. e.g. ['Preheat oven 180°C', 'While oven heats: brown 500g beef mince in a large pot', 'Put chicken thighs (800g) in oven, 25 min', 'Add passata, garlic, onion to mince; simmer 20 min', ...]. Aim for 8-15 steps that produce 4-5 batch meals.",
+                    },
+                    "portioning_and_storage": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "After cooking is done, exactly how to portion and where to store. Be explicit about adult vs toddler portions and fridge vs freezer destinations. e.g. ['Beef ragu: 2 adult portions to fridge for Mon/Tue dinners; 1 adult portion to freezer for Thu; 3 toddler-sized portions to freezer (use ice cube trays or small containers)', 'Roast chicken: pull meat off bone, ...']",
+                    },
+                    "containers_needed": {
+                        "type": "string",
+                        "description": "Rough count of containers/bags needed. e.g. '4 fridge containers, 6 freezer-safe bags, 4 small toddler-portion containers'",
+                    },
+                },
+            },
             "shopping_list": {
                 "type": "array",
                 "items": {
@@ -140,6 +215,11 @@ FAMILY_TOOL_SCHEMA = {
                             "description": "Woolworths, Coles, Aldi, IGA, or 'any'",
                         },
                         "approx_cost_aud": {"type": "number"},
+                        "prep_destiny": {
+                            "type": "string",
+                            "enum": ["batch_sunday", "fresh_for_wed", "fresh_for_thu", "fresh_for_fri", "fresh_for_sat", "fresh_for_sun", "pantry", ""],
+                            "description": "For meat/fish: 'batch_sunday' = cooked all together on prep day, then portioned and stored. 'fresh_for_<day>' = bought to be cooked fresh on a specific weeknight (use the day closest to the cook night so the meat stays fresh). 'pantry' = shelf-stable. Empty for vegetables / dairy / non-perishable items where the user doesn't need a prep destiny.",
+                        },
                     },
                 },
             },
@@ -195,6 +275,15 @@ FAMILY_TOOL_SCHEMA = {
                                     "storage_notes": {
                                         "type": "string",
                                         "description": "Fridge/freezer life and reheat instructions, if relevant. e.g. 'Keeps 3 days in the fridge. Microwave covered, 90 sec.' Empty if not applicable.",
+                                    },
+                                    "prep_phase": {
+                                        "type": "string",
+                                        "enum": ["batch", "fresh"],
+                                        "description": "When batch-cook mode is on: 'batch' = cooked on prep day (Sunday) and reheated on the night. 'fresh' = cooked entirely on the night (variety nights). 'batch' meals MUST also fill in storage_notes and reheat_instructions thoroughly. Omit when batch mode is off.",
+                                    },
+                                    "reheat_instructions": {
+                                        "type": "string",
+                                        "description": "For batch meals only: exact reheat method on the night, separated for adult vs toddler portions if they differ. e.g. 'Adult: microwave covered 2 min on high, stir, 1 min more. Toddler: thaw overnight in fridge then microwave 60 sec on medium, stir, check temperature.'",
                                     },
                                     "appliances_used": {
                                         "type": "array",
@@ -485,7 +574,11 @@ def _audit_and_fix_plan(
     Mutates the plan dict in place and attaches an `audit` block with what was
     fixed. Returns the same plan dict for convenience.
     """
-    audit = {"total_corrected": None, "missing_ingredients": []}
+    audit = {
+        "total_corrected": None,
+        "missing_ingredients": [],
+        "batch_warnings": [],
+    }
 
     shopping = plan.get("shopping_list") or []
 
@@ -546,6 +639,54 @@ def _audit_and_fix_plan(
             })
         plan["shopping_list"] = shopping
 
+    # ---- Fix 3: batch-mode consistency ----
+    # Only check if the plan claims to be in batch mode (has sunday_prep_session
+    # or any meal with prep_phase set). Otherwise these checks don't apply.
+    has_batch_signal = bool(plan.get("sunday_prep_session"))
+    if not has_batch_signal:
+        for day in (plan.get("days") or []):
+            for meal in (day.get("meals") or []):
+                if meal.get("prep_phase"):
+                    has_batch_signal = True
+                    break
+            if has_batch_signal:
+                break
+
+    if has_batch_signal:
+        # 3a. Every meal with prep_phase=batch must have storage_notes + reheat_instructions
+        for day in (plan.get("days") or []):
+            for meal in (day.get("meals") or []):
+                if meal.get("prep_phase") == "batch":
+                    if not (meal.get("storage_notes") or "").strip():
+                        audit["batch_warnings"].append(
+                            f"\"{meal.get('name','(unnamed)')}\" is batch-cooked but has no storage notes."
+                        )
+                    if not (meal.get("reheat_instructions") or "").strip():
+                        audit["batch_warnings"].append(
+                            f"\"{meal.get('name','(unnamed)')}\" is batch-cooked but has no reheat instructions."
+                        )
+        # 3b. The sunday_prep_session should have at least a few steps and portioning lines
+        prep_session = plan.get("sunday_prep_session") or {}
+        if not prep_session.get("steps"):
+            audit["batch_warnings"].append(
+                "The prep-day session is missing — batch mode is on but no Sunday prep workflow was produced."
+            )
+        elif len(prep_session.get("steps") or []) < 3:
+            audit["batch_warnings"].append(
+                f"The prep-day session is very short ({len(prep_session.get('steps') or [])} steps) — it may not cover all the batch meals."
+            )
+        if not prep_session.get("portioning_and_storage"):
+            audit["batch_warnings"].append(
+                "The prep-day session has no portioning & storage instructions — you'll know what to cook but not where to put it."
+            )
+
+    if audit["batch_warnings"]:
+        log.warning(
+            "Plan has %d batch-mode warning(s): %s",
+            len(audit["batch_warnings"]),
+            audit["batch_warnings"][:3],
+        )
+
     plan["audit"] = audit
     return plan
 
@@ -575,12 +716,21 @@ def build_family_plan(
     lifter_protein_target: Optional[int] = None,
     training_days: Optional[List[str]] = None,
     calibration: Optional[Dict[str, Any]] = None,
+    batch_mode: bool = True,
+    prep_day: str = "Sunday",
+    fresh_cook_nights: int = 2,
+    has_toddler: bool = False,
 ) -> Dict[str, Any]:
     """Generate a family meal plan and return the validated dict.
 
     `calibration` is the multiplier dict returned by db.calibration_multiplier.
     When the household consistently spends more (or less) than estimates, we
     pass that ratio in so the planner can tighten its own estimates.
+
+    `batch_mode`: when True (default), most dinners are cooked on `prep_day`
+    and reheated through the week. `fresh_cook_nights` controls how many
+    nights per week stay fresh-cooked for variety. `has_toddler` triggers
+    stricter shelf-life rules in the prompt.
     """
 
     appliances = appliances or ["oven", "stovetop", "microwave"]
@@ -603,10 +753,39 @@ def build_family_plan(
         "cooking_strategy": cooking_strategy,
         "lifter_protein_target_g": lifter_protein_target,
         "training_days": training_days,
+        "batch_mode": batch_mode,
+        "prep_day": prep_day,
+        "fresh_cook_nights_per_week": fresh_cook_nights,
+        "has_toddler": has_toddler,
         "days": days,
     }
 
     strategy_notes = []
+    if batch_mode:
+        toddler_note = (
+            " THERE IS A TODDLER IN THE HOUSEHOLD. Apply the stricter toddler-safety "
+            "shelf-life rules from priority 13(g): toddler cooked-meat portions in the "
+            "fridge keep only 2 days (not 3), so any toddler portion that won't be "
+            "eaten by the day after prep day MUST be frozen on prep day. Cooked fish "
+            "for the toddler keeps only 1 day in the fridge. Every batch meal that "
+            "the toddler shares needs explicit toddler-portion freeze instructions "
+            "in the portioning_and_storage section of sunday_prep_session and in "
+            "each meal's storage_notes."
+            if has_toddler else ""
+        )
+        strategy_notes.append(
+            f"BATCH MODE IS ON. Prep day is {prep_day}. Design the week as roughly "
+            f"{days - fresh_cook_nights} batch-cooked dinners + {fresh_cook_nights} "
+            f"fresh-cooked variety nights. Batch meals are cooked together on {prep_day} "
+            f"in a single prep session (described in `sunday_prep_session`), portioned, "
+            f"and reheated through the week. Fresh nights are typically mid-to-late week "
+            f"(Wed and Fri, or similar) — use them for pan-fried, stir-fried, or seared "
+            f"dishes that don't reheat well.\n"
+            f"Every meal MUST have `prep_phase` set to 'batch' or 'fresh'. Batch meals "
+            f"MUST have `storage_notes` and `reheat_instructions` populated. Shopping list "
+            f"meat items MUST have `prep_destiny` set. The plan MUST include a populated "
+            f"`sunday_prep_session` block.{toddler_note}"
+        )
     if cooking_strategy.get("batch_cook"):
         strategy_notes.append(
             "BATCH COOKING is preferred: design at least two 'anchor' meals "
@@ -716,6 +895,8 @@ def build_toddler_plan(
     daycare_lunch_reuse: bool = False,
     weekend_meal_slots: Optional[List[str]] = None,
     daycare_days: Optional[List[str]] = None,
+    batch_mode: bool = True,
+    prep_day: str = "Sunday",
 ) -> Dict[str, Any]:
     """Generate a toddler meal plan.
 
@@ -759,10 +940,25 @@ def build_toddler_plan(
         "daycare_days": daycare_days,
         "eats_with_family": eats_with_family,
         "daycare_lunch_reuse": daycare_lunch_reuse,
+        "batch_mode": batch_mode,
+        "prep_day": prep_day,
     }
 
     # Tailor the user message to the mode the user picked.
     mode_notes = []
+    if batch_mode:
+        mode_notes.append(
+            f"BATCH MODE IS ON. Prep day is {prep_day}. Apply the stricter toddler "
+            f"shelf-life rules: cooked meat in fridge ≤2 days, cooked fish ≤1 day. "
+            f"Any toddler portion not eaten by the day after {prep_day} MUST be frozen "
+            f"on {prep_day} — record this in each meal's texture_notes. On fresh-cook "
+            f"adult nights where the toddler can't share, the toddler eats a thawed "
+            f"batch portion from {prep_day}'s cooking — never raw-from-fridge meat. "
+            f"If eats_with_family is on AND a family plan is provided, defer to the "
+            f"family plan's batch structure; otherwise design toddler dinners with "
+            f"the proteins cooked together on {prep_day}, portioned into "
+            f"single-toddler-serve containers, and reheated through the week."
+        )
     if daycare_context == "weekdays_full" and daycare_days:
         dc_list = ", ".join(daycare_days)
         non_dc_weekdays = [d for d in ["Monday","Tuesday","Wednesday","Thursday","Friday"]
