@@ -225,6 +225,13 @@
       {% if meal.uses_pantry %}
       <p class="tiny muted" style="margin-top:.8rem;"><em>From pantry:</em> {{ meal.uses_pantry|join(", ") }}</p>
       {% endif %}
+      {% if meal.macros and (meal.macros.protein or meal.macros.carb or meal.macros.fat) %}
+      <div class="macros">
+        {% if meal.macros.protein %}<div class="macro"><span class="macro-label">Protein</span> {{ meal.macros.protein }}</div>{% endif %}
+        {% if meal.macros.carb %}<div class="macro"><span class="macro-label">Carb</span> {{ meal.macros.carb }}</div>{% endif %}
+        {% if meal.macros.fat %}<div class="macro"><span class="macro-label">Fat</span> {{ meal.macros.fat }}</div>{% endif %}
+      </div>
+      {% endif %}
       {% if meal.key_nutrients %}
       <p class="tiny muted" style="margin-top:.8rem;"><em>Key nutrients:</em> {{ meal.key_nutrients|join(", ") }}</p>
       {% endif %}
@@ -245,7 +252,7 @@
   </h2>
 
   {% set audit = plan.payload.audit %}
-  {% if audit and (audit.total_corrected or audit.missing_ingredients or audit.batch_warnings) %}
+  {% if audit and (audit.total_corrected or audit.missing_ingredients or audit.batch_warnings or audit.macro_warnings) %}
   <div class="audit-notice">
     <div class="audit-title">⚠ The planner had a couple of slips on this plan — we've fixed what we can</div>
     {% if audit.missing_ingredients %}
@@ -259,6 +266,14 @@
         <strong>Total was wrong</strong>: the planner stated <s>${{ "%.2f"|format(audit.total_corrected.stated) }}</s>
         but the line items actually sum to <strong>${{ "%.2f"|format(audit.total_corrected.actual_sum) }}</strong>.
         We're showing the corrected sum.
+      </div>
+    {% endif %}
+    {% if audit.macro_warnings %}
+      <div class="audit-row">
+        <strong>Unbalanced toddler meals</strong>: some main meals are missing a protein or carb. A balanced toddler meal needs protein + carb + fat:
+        <ul style="margin:.3rem 0 0 0; padding-left:1.2em;">
+          {% for w in audit.macro_warnings %}<li>{{ w }}</li>{% endfor %}
+        </ul>
       </div>
     {% endif %}
     {% if audit.batch_warnings %}
@@ -642,6 +657,30 @@
   .tag.iron-plant { background: var(--cream-2); color: var(--ink-soft); }
   .tag.prep-batch { background: #d6c7a2; color: var(--ink); }
   .tag.prep-fresh { background: var(--ink); color: var(--cream); }
+
+  .macros {
+    margin-top: .8rem;
+    padding-top: .7rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .macro {
+    font-size: .82rem;
+    color: var(--ink);
+    line-height: 1.35;
+  }
+  .macro-label {
+    display: inline-block;
+    min-width: 3.6em;
+    font-size: .66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: var(--forest);
+    margin-right: .4em;
+  }
 
   .prep-session {
     background: var(--cream-2);

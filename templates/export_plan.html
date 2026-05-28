@@ -485,6 +485,9 @@
     </div>
     {% endif %}
 
+    {% if meal.macros and (meal.macros.protein or meal.macros.carb or meal.macros.fat) %}
+      <p class="meal-note"><strong>Balance</strong>{% if meal.macros.protein %}protein: {{ meal.macros.protein }}{% endif %}{% if meal.macros.carb %} · carb: {{ meal.macros.carb }}{% endif %}{% if meal.macros.fat %} · fat: {{ meal.macros.fat }}{% endif %}</p>
+    {% endif %}
     {% if meal.toddler_modifications %}
       <p class="meal-note"><strong>For the little one</strong>{{ meal.toddler_modifications }}</p>
     {% endif %}

@@ -116,6 +116,13 @@ NUTRITIONAL APPROACH:
    - "low_iron": dinner is low in iron (it's OK to have some of these; not every meal needs iron, but most should)
 - Always include `key_nutrients` listing what this meal genuinely contributes (iron, calcium, omega-3, fibre, etc).
 
+MEAL BALANCE (HARD RULE for breakfast, lunch, dinner — NOT required for snacks):
+Every main meal MUST contain all three of:
+  1. A PROTEIN source (meat, fish, egg, dairy, lentils/legumes, tofu) — for growth.
+  2. A CARBOHYDRATE source (rice, pasta, bread, potato, oats, other grains) — toddlers need steady energy and have small stomachs, so every main meal needs an energy base.
+  3. A HEALTHY FAT source (olive oil, full-fat dairy, avocado, oily fish, nut butters thinly spread, egg yolk) — toddlers under 2 need a high proportion of dietary fat (30-40% of energy) for brain development. Do not design low-fat toddler meals.
+Fill in the `macros` object on every main meal naming the specific protein, carb, and fat in that meal. If you find a meal is missing one of the three, fix the meal before submitting — add a component rather than leaving it unbalanced. Snacks (morning_snack, afternoon_snack) are exempt from this rule and can be lighter (just fruit, just yoghurt, etc.), though a little protein or fat in a snack is welcome.
+
 SAFETY (HARD CONSTRAINTS):
 - No whole nuts, whole grapes/cherry tomatoes/sausage rounds (always quarter lengthways)
 - No honey under 12 months
@@ -403,6 +410,15 @@ TODDLER_TOOL_SCHEMA = {
                                         "type": "array",
                                         "items": {"type": "string"},
                                     },
+                                    "macros": {
+                                        "type": "object",
+                                        "description": "REQUIRED for breakfast, lunch, dinner. The protein/carb/fat breakdown for this meal. Each names the specific food providing it. Omit for snacks.",
+                                        "properties": {
+                                            "protein": {"type": "string", "description": "e.g. 'minced beef', 'red lentils', 'egg', 'full-fat yoghurt'"},
+                                            "carb": {"type": "string", "description": "e.g. 'soft pasta', 'mashed potato', 'rice', 'wholemeal toast'"},
+                                            "fat": {"type": "string", "description": "e.g. 'olive oil', 'full-fat dairy', 'avocado', 'oily fish'"},
+                                        },
+                                    },
                                     "texture_notes": {
                                         "type": "string",
                                         "description": "e.g. 'cut grapes lengthways into quarters'",
@@ -561,6 +577,7 @@ def _ingredient_matches_shopping(ing_norm: str, shopping_norms: List[str]) -> bo
 def _audit_and_fix_plan(
     plan: Dict[str, Any],
     pantry: List[Dict[str, Any]],
+    audience: str = "family",
 ) -> Dict[str, Any]:
     """After the model returns, sanity-check two known failure modes:
 
@@ -578,6 +595,7 @@ def _audit_and_fix_plan(
         "total_corrected": None,
         "missing_ingredients": [],
         "batch_warnings": [],
+        "macro_warnings": [],
     }
 
     shopping = plan.get("shopping_list") or []
@@ -686,6 +704,35 @@ def _audit_and_fix_plan(
             len(audit["batch_warnings"]),
             audit["batch_warnings"][:3],
         )
+
+    # ---- Fix 4: toddler main-meal macro balance ----
+    # Every breakfast/lunch/dinner for a toddler should declare a protein and a
+    # carb (fat is encouraged but not hard-flagged, since it often comes from
+    # cooking oil the model may not always declare). Snacks are exempt.
+    if audience == "toddler":
+        MAIN_SLOTS = {"breakfast", "lunch", "dinner"}
+        for day in (plan.get("days") or []):
+            for meal in (day.get("meals") or []):
+                slot = (meal.get("slot") or "").lower()
+                if slot not in MAIN_SLOTS:
+                    continue
+                macros = meal.get("macros") or {}
+                missing = []
+                if not (macros.get("protein") or "").strip():
+                    missing.append("protein")
+                if not (macros.get("carb") or "").strip():
+                    missing.append("carb")
+                if missing:
+                    audit["macro_warnings"].append(
+                        f"{day.get('day','?')} {slot} (\"{meal.get('name','unnamed')}\") is missing a "
+                        f"{' and '.join(missing)} — toddler main meals should have protein + carb + fat."
+                    )
+        if audit["macro_warnings"]:
+            log.warning(
+                "Toddler plan has %d macro-balance warning(s): %s",
+                len(audit["macro_warnings"]),
+                audit["macro_warnings"][:3],
+            )
 
     plan["audit"] = audit
     return plan
@@ -1043,7 +1090,7 @@ def build_toddler_plan(
     plan = _extract_tool_input(msg, "submit_toddler_plan")
     _truncate_summary(plan)
     _validate_plan_or_raise(plan, expected_days=days)
-    _audit_and_fix_plan(plan, pantry)
+    _audit_and_fix_plan(plan, pantry, audience="toddler")
     return plan
 
 
