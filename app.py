@@ -45,8 +45,9 @@ db.init_db(config.DB_PATH, config.HOUSEHOLD)
 # Pages not in the map get no active tab (e.g. the index page itself, /more).
 _TAB_FOR_ENDPOINT = {
     "index": "home",
-    "plan_new": "plan",
-    "plan_view": "plan",
+    "plans_list": "plans",
+    "plan_new": "plans",
+    "plan_view": "plans",
     "shopping_current": "shopping",
     "toddler": "toddler",
     "more": "more",
@@ -64,6 +65,17 @@ def inject_active_tab():
     """Make `active_tab` available in every template so the bottom tab bar
     can highlight the right one. Endpoints not in the map get an empty value."""
     return {"active_tab": _TAB_FOR_ENDPOINT.get(request.endpoint or "", "")}
+
+
+@app.after_request
+def no_cache_for_listings(resp):
+    """Pages that show a list of plans need to refresh every time, otherwise
+    after deleting a plan the user might still see it in cached responses.
+    Static assets are unaffected."""
+    if request.endpoint in {"index", "plans_list", "toddler", "shopping_current"}:
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    return resp
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +124,45 @@ def shopping_current():
     if not plans:
         return redirect(url_for("plan_new"))
     return redirect(url_for("plan_view", plan_id=plans[0]["id"]) + "#shopping")
+
+
+@app.route("/plans")
+def plans_list():
+    """All plans, family and toddler combined, with optional filter.
+    The bottom-tab destination for quick access to existing plans."""
+    audience_filter = request.args.get("audience", "")
+    if audience_filter not in {"family", "toddler"}:
+        audience_filter = ""
+
+    # When no filter, the "this week" section shows the latest of each audience.
+    # When filtered, the featured section is dropped — the user wants a flat
+    # list of just that audience, sorted newest first.
+    featured = []
+    if not audience_filter:
+        latest_family = db.list_plans(config.DB_PATH, audience="family", limit=1)
+        latest_toddler = db.list_plans(config.DB_PATH, audience="toddler", limit=1)
+        if latest_family:
+            featured.append(latest_family[0])
+        if latest_toddler:
+            featured.append(latest_toddler[0])
+    featured_ids = {p["id"] for p in featured}
+
+    # The full list, filtered if requested
+    all_plans = db.list_plans(
+        config.DB_PATH,
+        audience=audience_filter or None,
+        limit=100,
+    )
+    # Everything else (not in the featured pair) — the "older" section
+    older = [p for p in all_plans if p["id"] not in featured_ids]
+
+    return render_template(
+        "plans_list.html",
+        featured=featured,
+        older=older,
+        audience_filter=audience_filter,
+        total=len(all_plans),
+    )
 
 
 @app.route("/more")

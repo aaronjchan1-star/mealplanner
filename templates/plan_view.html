@@ -467,13 +467,15 @@
 {% endif %}
 
 <section class="danger-zone">
-  <div>
+  <div class="dz-text">
     <h3>Done with this plan?</h3>
     <p class="tiny muted">Deleting removes the plan permanently. Your feedback (thumbs up/down on individual meals) is kept and still informs future plans.</p>
   </div>
-  <form method="post" action="{{ url_for('plan_delete', plan_id=plan.id) }}"
-        onsubmit="return confirm('Delete this plan? This cannot be undone.');">
-    <button type="submit" class="danger">Delete plan</button>
+  <form method="post" action="{{ url_for('plan_delete', plan_id=plan.id) }}" id="delete-form">
+    <button type="button" class="danger danger-big" id="delete-btn"
+            data-plan-name="{{ plan.payload.summary or 'this plan' }}">
+      Delete plan
+    </button>
   </form>
 </section>
 
@@ -651,26 +653,49 @@
   .prep-tag-fresh { background: var(--ink); color: var(--cream); }
   .shop-row.auto-added { background: rgba(200,155,60,0.07); }
   .danger-zone {
-    margin: 4rem 0 1rem;
-    padding: 1.2rem 1.4rem;
-    border: 1px dashed var(--line);
-    border-radius: 3px;
+    margin: 3rem 0 1rem;
+    padding: 1.2rem 1.2rem 1.4rem;
+    border: 1px dashed var(--line-2);
+    border-radius: 5px;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.2rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
     background: transparent;
   }
+  .dz-text { flex: 1; }
   .danger-zone h3 {
     font-family: var(--serif);
     font-size: 1.05rem;
-    margin: 0 0 .2rem;
-    color: var(--ink-soft);
-    font-weight: 500;
+    margin: 0 0 .3rem;
+    color: var(--ink);
+    font-weight: 600;
   }
   .danger-zone p { margin: 0; max-width: 50ch; }
   .danger-zone form { margin: 0; }
+  /* Big, full-width delete button on mobile — no ambiguity about whether you tapped it */
+  .danger-big {
+    width: 100%;
+    padding: 1rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    background: transparent;
+    color: var(--terra);
+    border: 1.5px solid var(--terra);
+    border-radius: 4px;
+    min-height: 52px;
+  }
+  .danger-big:hover { background: var(--terra); color: var(--cream); }
+  .danger-big:active { background: var(--terra); color: var(--cream); transform: scale(0.99); }
+  .danger-big:disabled { opacity: .6; cursor: default; }
+  @media (min-width: 720px) {
+    .danger-zone {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .danger-big { width: auto; min-width: 180px; }
+  }
   .iron-tally {
     background: var(--paper);
     border: 1px solid var(--line);
@@ -1139,5 +1164,24 @@ function resetShoppingChecks(planId) {
   if (countTodo) countTodo.textContent = allItems + " to buy";
   if (countDone) countDone.textContent = "0 got";
 }
+
+// --- Delete plan: belt-and-braces. Inline onsubmit can be flaky on iOS Safari
+// when the confirm() dialog is dismissed and the event chain is interrupted.
+// Using a click handler that does the confirm and only then submits is more
+// reliable. We also disable the button after submit so the user can't double-tap.
+(function () {
+  const btn = document.getElementById("delete-btn");
+  const form = document.getElementById("delete-form");
+  if (!btn || !form) return;
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (btn.disabled) return;
+    const ok = window.confirm("Delete this plan? This cannot be undone.");
+    if (!ok) return;
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+    form.submit();
+  });
+})();
 </script>
 {% endblock %}

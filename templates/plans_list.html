@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Plans{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Your library</div>
+<h1>Plans</h1>
+<p class="lede">Every plan you've generated, family and toddler together. Tap one to open. The newest of each is pinned at the top.</p>
+
+<div class="plans-cta">
+  <a class="btn" href="{{ url_for('plan_new') }}">+ New family plan</a>
+  <a class="btn-outline" href="{{ url_for('toddler') }}">+ New toddler plan</a>
+</div>
+
+{# Filter chips #}
+<div class="filter-chips" role="tablist">
+  <a class="chip{% if not audience_filter %} active{% endif %}" href="{{ url_for('plans_list') }}">All{% if total %} <span class="chip-n">{{ total }}</span>{% endif %}</a>
+  <a class="chip{% if audience_filter == 'family' %} active{% endif %}" href="{{ url_for('plans_list', audience='family') }}">Family</a>
+  <a class="chip{% if audience_filter == 'toddler' %} active{% endif %}" href="{{ url_for('plans_list', audience='toddler') }}">Toddler</a>
+</div>
+
+{# Featured: the newest family + the newest toddler, side by side on desktop, stacked on mobile #}
+{% if featured and not audience_filter %}
+<section class="plans-section">
+  <div class="plans-section-head">
+    <h2>This week</h2>
+    <span class="muted tiny">Most recent of each</span>
+  </div>
+  <div class="plans-grid plans-grid-featured">
+    {% for p in featured %}
+      {% include "_plan_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# Older: the rest of the unfiltered list, or all-of-audience if filtered #}
+{% if older %}
+<section class="plans-section">
+  <div class="plans-section-head">
+    <h2>{% if audience_filter == 'family' %}All family plans{% elif audience_filter == 'toddler' %}All toddler plans{% else %}Older{% endif %}</h2>
+    <span class="muted tiny">{{ older|length }} plan{{ '' if older|length == 1 else 's' }}</span>
+  </div>
+  <div class="plans-grid">
+    {% for p in older %}
+      {% include "_plan_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% elif not featured %}
+<div class="card empty">
+  No plans yet. <a href="{{ url_for('plan_new') }}">Start with this week →</a>
+</div>
+{% endif %}
+
+<style>
+  .plans-cta {
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+    margin: 0 0 1.6rem;
+  }
+  .plans-cta .btn,
+  .plans-cta .btn-outline {
+    display: block;
+    text-align: center;
+    width: 100%;
+    padding: .9rem 1.4rem;
+    min-height: var(--tap);
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 4px;
+  }
+  .plans-cta .btn { background: var(--forest); color: var(--cream); border: none; }
+  .plans-cta .btn:hover { background: var(--terra); color: var(--cream); }
+  .plans-cta .btn-outline {
+    background: var(--paper);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+  .plans-cta .btn-outline:hover { background: var(--ink); color: var(--cream); }
+  @media (min-width: 720px) {
+    .plans-cta { flex-direction: row; gap: 1rem; max-width: 540px; }
+    .plans-cta .btn,
+    .plans-cta .btn-outline { width: auto; min-width: 200px; flex: 1; }
+  }
+
+  .filter-chips {
+    display: flex;
+    gap: .45rem;
+    margin: 0 0 1.4rem;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .5rem .95rem;
+    background: var(--cream-2);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: background .15s, color .15s, border-color .15s;
+    min-height: 36px;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--line-2); }
+  .chip.active {
+    background: var(--forest);
+    color: var(--cream);
+    font-weight: 600;
+  }
+  .chip.active .chip-n { color: var(--cream); opacity: 0.7; }
+  .chip-n {
+    font-family: var(--serif);
+    font-weight: 600;
+    color: var(--terra);
+  }
+
+  .plans-section { margin-bottom: 2rem; }
+  .plans-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 .8rem;
+    gap: 1rem;
+  }
+  .plans-section-head h2 {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+
+  .plans-grid {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+  }
+  @media (min-width: 720px) {
+    .plans-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .plans-grid-featured { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Plan card with inline delete */
+  .plan-row {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    position: relative;
+    transition: border-color .15s;
+  }
+  .plan-row:hover { border-color: var(--terra); }
+  .plan-row .top {
+    display: flex;
+    align-items: baseline;
+    gap: .55rem;
+    flex-wrap: wrap;
+  }
+  .plan-row .audience-badge {
+    font-size: .65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    padding: .15rem .55rem;
+    border-radius: 999px;
+    background: var(--forest);
+    color: var(--cream);
+  }
+  .plan-row .audience-badge.toddler {
+    background: var(--mustard);
+    color: var(--ink);
+  }
+  .plan-row .when {
+    font-size: .78rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+  }
+  .plan-row .plan-title {
+    color: var(--ink);
+    margin: 0;
+  }
+  .plan-row .plan-title a {
+    color: inherit;
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.1rem;
+    line-height: 1.25;
+  }
+  .plan-row .plan-meta {
+    display: flex;
+    gap: .85rem;
+    font-size: .82rem;
+    color: var(--ink-soft);
+    flex-wrap: wrap;
+  }
+  .plan-row .plan-meta strong {
+    font-family: var(--serif);
+    color: var(--forest);
+    font-weight: 600;
+  }
+  .plan-row .row-actions {
+    display: flex;
+    gap: .6rem;
+    align-items: center;
+    margin-top: .5rem;
+  }
+  .plan-row .row-actions .open-link {
+    flex: 1;
+    text-align: center;
+    padding: .55rem .9rem;
+    background: var(--cream-2);
+    color: var(--ink);
+    border-radius: 4px;
+    font-size: .85rem;
+    font-weight: 500;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .plan-row .row-actions .open-link:hover {
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .plan-row .row-actions .row-delete {
+    background: transparent;
+    color: var(--terra);
+    border: 1px solid var(--terra);
+    padding: .55rem .9rem;
+    border-radius: 4px;
+    font-size: .85rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 40px;
+    min-width: 80px;
+  }
+  .plan-row .row-actions .row-delete:hover {
+    background: var(--terra);
+    color: var(--cream);
+  }
+  .plan-row .row-actions .row-delete:disabled {
+    opacity: .6;
+    cursor: default;
+  }
+</style>
+
+<script>
+// Inline delete on plans list — same belt-and-braces pattern as plan_view.
+document.querySelectorAll(".row-delete").forEach(btn => {
+  btn.addEventListener("click", function (e) {
+    e.preventDefault();
+    if (btn.disabled) return;
+    const planId = btn.dataset.planId;
+    const planLabel = btn.dataset.planLabel || "this plan";
+    const ok = window.confirm("Delete \"" + planLabel + "\"? This cannot be undone.");
+    if (!ok) return;
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+    const form = document.getElementById("delete-form-" + planId);
+    if (form) form.submit();
+  });
+});
+</script>
+
+{% endblock %}

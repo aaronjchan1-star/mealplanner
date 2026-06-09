@@ -46,8 +46,8 @@
     <a class="tab{% if tab == 'home' %} active{% endif %}" href="{{ url_for('index') }}">
       <span class="ic" aria-hidden="true">◐</span>Home
     </a>
-    <a class="tab{% if tab == 'plan' %} active{% endif %}" href="{{ url_for('plan_new') }}">
-      <span class="ic" aria-hidden="true">✎</span>Plan
+    <a class="tab{% if tab == 'plans' %} active{% endif %}" href="{{ url_for('plans_list') }}">
+      <span class="ic" aria-hidden="true">✎</span>Plans
     </a>
     <a class="tab{% if tab == 'shopping' %} active{% endif %}" href="{{ url_for('shopping_current') }}">
       <span class="ic" aria-hidden="true">🛒</span>Shop

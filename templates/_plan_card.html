@@ -1,0 +1,29 @@
+<div class="plan-row">
+  <div class="top">
+    <span class="audience-badge {% if p.audience == 'toddler' %}toddler{% endif %}">{{ p.audience }}</span>
+    <span class="when">{{ p.created_at[:10] }} · week of {{ p.week_start }}</span>
+  </div>
+  <h3 class="plan-title">
+    <a href="{{ url_for('plan_view', plan_id=p.id) }}">{{ p.payload.summary or ("Toddler plan" if p.audience == "toddler" else "Weekly plan") }}</a>
+  </h3>
+  <div class="plan-meta">
+    {% set days = p.payload.days or [] %}
+    <span><strong>{{ days|length }}</strong> day{{ '' if days|length == 1 else 's' }}</span>
+    {% if p.payload.estimated_total_cost_aud %}
+      <span><strong>${{ "%.0f"|format(p.payload.estimated_total_cost_aud) }}</strong> estimated</span>
+    {% endif %}
+    {% if p.budget_cents %}
+      <span>budget ${{ "%.0f"|format(p.budget_cents/100) }}</span>
+    {% endif %}
+  </div>
+  <div class="row-actions">
+    <a class="open-link" href="{{ url_for('plan_view', plan_id=p.id) }}">View →</a>
+    <form id="delete-form-{{ p.id }}" method="post" action="{{ url_for('plan_delete', plan_id=p.id) }}" style="margin:0;">
+      <button type="button" class="row-delete"
+              data-plan-id="{{ p.id }}"
+              data-plan-label="{{ p.payload.summary or ('Toddler plan' if p.audience == 'toddler' else 'Weekly plan') }}">
+        Delete
+      </button>
+    </form>
+  </div>
+</div>
