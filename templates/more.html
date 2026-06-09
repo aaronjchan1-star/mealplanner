@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}More{% endblock %}
+{% block content %}
+
+<div class="eyebrow">Everything else</div>
+<h1>More</h1>
+<p class="lede">The bits you don't touch every day — pantry, dislikes, recurring schedules, budget calibration, settings.</p>
+
+<div class="more-grid">
+  <a class="more-card" href="{{ url_for('meal_quick') }}">
+    <h3>Tonight</h3>
+    <p>Generate a single meal for tonight without a whole plan.</p>
+  </a>
+  <a class="more-card" href="{{ url_for('pantry') }}">
+    <h3>Pantry</h3>
+    <p>What's already in the cupboard. The planner uses these before adding to the shopping list.</p>
+  </a>
+  <a class="more-card" href="{{ url_for('dislikes') }}">
+    <h3>Dislikes &amp; allergies</h3>
+    <p>The veto list. Ingredients or cuisines the planner won't include.</p>
+  </a>
+  <a class="more-card" href="{{ url_for('schedules') }}">
+    <h3>Recurring plans</h3>
+    <p>Plans that generate themselves on a schedule — every Sunday morning, say.</p>
+  </a>
+  <a class="more-card" href="{{ url_for('budget') }}">
+    <h3>Budget calibration</h3>
+    <p>Log your actual receipts so the planner learns your real grocery costs.</p>
+  </a>
+  <a class="more-card" href="{{ url_for('settings') }}">
+    <h3>Settings</h3>
+    <p>Household details, supermarkets, kids, batch-cook defaults.</p>
+  </a>
+</div>
+
+<style>
+  .more-grid { display: flex; flex-direction: column; gap: .65rem; margin-top: 1.5rem; }
+  .more-card {
+    display: block;
+    padding: 1rem 1.1rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    transition: transform .12s, border-color .15s;
+  }
+  .more-card:active { transform: scale(0.99); border-color: var(--terra); }
+  .more-card:hover { border-color: var(--terra); }
+  .more-card h3 {
+    margin: 0 0 .25rem;
+    font-size: 1.15rem;
+  }
+  .more-card p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: .9rem;
+    line-height: 1.4;
+  }
+  @media (min-width: 720px) {
+    .more-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+  }
+</style>
+
+{% endblock %}

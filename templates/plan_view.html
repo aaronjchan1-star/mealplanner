@@ -188,7 +188,26 @@
       {% if meal.portion_strategies %}
       <div class="portions">
         <div class="portions-head">On the plates</div>
-        <table>
+
+        {# Mobile: stacked cards #}
+        <div class="portion-cards">
+          {% for p in meal.portion_strategies %}
+          <div class="portion-card{% if p.person|lower == 'lifter' %} lifter{% endif %}">
+            <div class="who">{{ p.person }}</div>
+            <div class="what">
+              {{ p.serve_description }}
+              {% if p.addons %}<div class="addon">+ {{ p.addons }}</div>{% endif %}
+            </div>
+            <div class="stats">
+              <span class="stat-pair"><span class="lab">Protein</span> <span class="val">{{ p.protein_g_estimate }}g</span></span>
+              <span class="stat-pair"><span class="lab">kcal</span> <span class="val">{{ p.kcal_estimate }}</span></span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {# Desktop: table #}
+        <table class="portion-table-desktop">
           <thead>
             <tr><th>Plate</th><th>What's on it</th><th class="num">Protein</th><th class="num">kcal</th></tr>
           </thead>
@@ -217,10 +236,14 @@
         <hr style="border:none;border-top:1px solid var(--line);margin:.8rem 0;">
       {% endif %}
       {% if meal.ingredients %}
-      <h4>Ingredients</h4>
-      <ul>
-        {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
-      </ul>
+      <details class="ingredients-collapse">
+        <summary><span>Ingredients</span></summary>
+        <div class="ingredients-body">
+          <ul>
+            {% for ing in meal.ingredients %}<li>{{ ing }}</li>{% endfor %}
+          </ul>
+        </div>
+      </details>
       {% endif %}
       {% if meal.uses_pantry %}
       <p class="tiny muted" style="margin-top:.8rem;"><em>From pantry:</em> {{ meal.uses_pantry|join(", ") }}</p>
@@ -291,7 +314,41 @@
     Tap an item to move it to "Already got" at the bottom. Tap again to bring it back. Your progress saves on this device.
     <button type="button" class="ghost tiny-btn" onclick="resetShoppingChecks({{ plan.id }})" style="margin-left:.5rem;">reset</button>
   </p>
-  <table class="shopping-table" data-plan-id="{{ plan.id }}">
+
+  {# Mobile: card list. Hidden on desktop via CSS. #}
+  <div class="shopping-cards-wrap" data-plan-id="{{ plan.id }}" id="shopping">
+    <div class="shopping-cards shop-todo-cards">
+      {% for item in plan.payload.shopping_list %}
+      <div class="shopping-card shop-card-row{% if item.auto_added %} auto-added{% endif %}" data-key="{{ item.item }}" tabindex="0" role="button" aria-label="{{ item.item }} — tap to mark bought">
+        <div class="ck" aria-hidden="true"></div>
+        <div class="body">
+          <div class="item-name">
+            <span>{{ item.item }}</span>
+            {% if item.auto_added %}<span class="auto-flag">added by us</span>{% endif %}
+            {% if item.prep_destiny == 'batch_sunday' %}<span class="prep-tag prep-tag-batch">cook {{ (plan.payload.prep_day or 'Sun')[:3] }}</span>{% endif %}
+            {% if item.prep_destiny and item.prep_destiny.startswith('fresh_for_') %}{% set day_short = item.prep_destiny.replace('fresh_for_','')|capitalize %}<span class="prep-tag prep-tag-fresh">fresh for {{ day_short }}</span>{% endif %}
+          </div>
+          <div class="sub">
+            {% if item.quantity %}<span>{{ item.quantity }}</span>{% endif %}
+            {% if plan.audience == "family" and item.best_at %}<span>{{ item.best_at }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="price">${{ "%.2f"|format(item.approx_cost_aud or 0) }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="shopping-section-head shop-done-cards-head" style="display:none;">Already got</div>
+    <div class="shopping-cards shop-done-cards"></div>
+
+    <div class="shopping-total">
+      <span>Total</span>
+      <span class="cost">${{ "%.2f"|format(plan.payload.estimated_total_cost_aud or 0) }}</span>
+    </div>
+  </div>
+
+  {# Desktop: full table. Hidden on mobile via CSS. #}
+  <table class="shopping-table desktop-only" data-plan-id="{{ plan.id }}">
     <thead>
       <tr>
         <th style="width:1.6rem;"></th>
@@ -470,6 +527,14 @@
   .shopping-table .shop-row.checked { opacity: .55; }
   .shopping-table .shop-row.checked td:not(:first-child) { text-decoration: line-through; }
   .shopping-table .shop-check { width: 1.05rem; height: 1.05rem; accent-color: var(--forest); cursor: pointer; }
+
+  /* Mobile cards by default. Desktop table is hidden at small widths. */
+  .shopping-table.desktop-only { display: none; }
+  .shopping-cards-wrap { display: block; }
+  @media (min-width: 720px) {
+    .shopping-table.desktop-only { display: table; width: 100%; }
+    .shopping-cards-wrap { display: none; }
+  }
   .shop-counts {
     font-size: .72rem;
     text-transform: uppercase;
@@ -800,44 +865,108 @@
     padding: .8rem 1rem;
     background: var(--cream-2);
     border-left: 3px solid var(--forest);
-    border-radius: 2px;
+    border-radius: 3px;
   }
   .portions-head {
     font-size: .72rem;
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--ink-soft);
-    font-weight: 600;
-    margin-bottom: .4rem;
+    font-weight: 700;
+    margin-bottom: .6rem;
   }
-  .portions table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-  .portions th {
-    text-align: left;
-    padding: .25rem .4rem;
+
+  /* Mobile: stacked cards per person */
+  .portion-cards { display: flex; flex-direction: column; gap: .55rem; }
+  .portion-card {
+    padding: .65rem .8rem;
+    background: var(--paper);
+    border-radius: 4px;
+    border-left: 2px solid var(--line-2);
+  }
+  .portion-card.lifter {
+    border-left-color: var(--terra);
+    background: color-mix(in srgb, var(--paper) 92%, var(--terra) 8%);
+  }
+  .portion-card .who {
     font-size: .68rem;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--ink-soft);
-    font-weight: 600;
-    border-bottom: 1px solid var(--line);
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: var(--forest);
+    margin-bottom: .25rem;
   }
-  .portions td { padding: .4rem; vertical-align: top; }
-  .portions td.num {
-    text-align: right;
+  .portion-card.lifter .who { color: var(--terra); }
+  .portion-card .what {
+    font-size: .95rem;
+    color: var(--ink);
+    line-height: 1.4;
+  }
+  .portion-card .addon {
+    font-size: .85rem;
+    color: var(--ink-soft);
+    font-style: italic;
+    margin-top: .2rem;
+  }
+  .portion-card .stats {
+    display: flex;
+    gap: 1.1rem;
+    margin-top: .45rem;
+    padding-top: .4rem;
+    border-top: 1px dashed var(--line-2);
+    font-size: .85rem;
+  }
+  .portion-card .stat-pair { display: inline-flex; align-items: baseline; gap: .35rem; }
+  .portion-card .stat-pair .lab {
+    font-size: .65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    font-weight: 700;
+  }
+  .portion-card .stat-pair .val {
     font-family: var(--serif);
     font-weight: 600;
     color: var(--forest);
-    white-space: nowrap;
-    width: 4rem;
   }
-  .portions tr:not(:last-child) td { border-bottom: 1px dashed var(--line); }
-  .portions tr.lifter-row td { background: rgba(184, 92, 58, 0.06); }
-  .portions tr.lifter-row td:first-child strong { color: var(--terra); }
-  .portions .addon {
-    font-size: .8rem;
-    color: var(--ink-soft);
-    font-style: italic;
-    margin-top: .15rem;
+  .portion-card.lifter .stat-pair .val { color: var(--terra); }
+
+  /* Desktop table — hidden by default */
+  .portion-table-desktop { display: none; }
+  @media (min-width: 720px) {
+    .portion-cards { display: none; }
+    .portion-table-desktop {
+      display: table;
+      width: 100%; border-collapse: collapse; font-size: .88rem;
+    }
+    .portion-table-desktop th {
+      text-align: left;
+      padding: .25rem .4rem;
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--ink-soft);
+      font-weight: 600;
+      border-bottom: 1px solid var(--line);
+    }
+    .portion-table-desktop td { padding: .4rem; vertical-align: top; }
+    .portion-table-desktop td.num {
+      text-align: right;
+      font-family: var(--serif);
+      font-weight: 600;
+      color: var(--forest);
+      white-space: nowrap;
+      width: 4rem;
+    }
+    .portion-table-desktop tr:not(:last-child) td { border-bottom: 1px dashed var(--line); }
+    .portion-table-desktop tr.lifter-row td { background: rgba(184, 92, 58, 0.06); }
+    .portion-table-desktop tr.lifter-row td:first-child strong { color: var(--terra); }
+    .portion-table-desktop .addon {
+      font-size: .8rem;
+      color: var(--ink-soft);
+      font-style: italic;
+      margin-top: .15rem;
+    }
   }
 </style>
 
@@ -883,55 +1012,99 @@ async function swap(btn) {
 }
 
 // --- Shopping list: tick to move into "Already got", untick to bring back ---
+// Works on both the desktop table and the mobile card list, kept in sync
+// via the same localStorage state key per plan.
 (function () {
   const table = document.querySelector(".shopping-table");
-  if (!table) return;
-  const planId = table.dataset.planId;
+  const cardsWrap = document.querySelector(".shopping-cards-wrap");
+  if (!table && !cardsWrap) return;
+  const planId = (table || cardsWrap).dataset.planId;
   const key = "shop:" + planId;
-  const todoTbody = table.querySelector(".shop-todo");
-  const doneTbody = table.querySelector(".shop-done");
-  const doneHead = table.querySelector(".shop-done-head");
+
+  const todoTbody = table ? table.querySelector(".shop-todo") : null;
+  const doneTbody = table ? table.querySelector(".shop-done") : null;
+  const doneHead = table ? table.querySelector(".shop-done-head") : null;
+  const todoCards = cardsWrap ? cardsWrap.querySelector(".shop-todo-cards") : null;
+  const doneCards = cardsWrap ? cardsWrap.querySelector(".shop-done-cards") : null;
+  const doneCardsHead = cardsWrap ? cardsWrap.querySelector(".shop-done-cards-head") : null;
   const countTodoEl = document.querySelector(`.shop-count-todo[data-plan-id="${planId}"]`);
   const countDoneEl = document.querySelector(`.shop-count-done[data-plan-id="${planId}"]`);
+
   let state = {};
   try { state = JSON.parse(localStorage.getItem(key) || "{}"); } catch (e) { state = {}; }
 
   function updateCounts() {
-    const todoN = todoTbody.querySelectorAll(".shop-row").length;
-    const doneN = doneTbody.querySelectorAll(".shop-row").length;
+    // Count from whichever view exists. Both should agree since they reflect
+    // the same state.
+    let todoN = 0, doneN = 0;
+    if (todoCards) {
+      todoN = todoCards.querySelectorAll(".shop-card-row").length;
+      doneN = doneCards.querySelectorAll(".shop-card-row").length;
+    } else if (todoTbody) {
+      todoN = todoTbody.querySelectorAll(".shop-row").length;
+      doneN = doneTbody.querySelectorAll(".shop-row").length;
+    }
     if (countTodoEl) countTodoEl.textContent = todoN + " to buy";
     if (countDoneEl) countDoneEl.textContent = doneN + " got";
-    // Hide the "Already got" header when nothing's there yet
-    doneHead.style.display = doneN > 0 ? "" : "none";
+    if (doneHead) doneHead.style.display = doneN > 0 ? "" : "none";
+    if (doneCardsHead) doneCardsHead.style.display = doneN > 0 ? "" : "none";
   }
 
-  function moveRow(row, ticked) {
-    row.classList.toggle("checked", ticked);
-    const target = ticked ? doneTbody : todoTbody;
-    target.appendChild(row);
-  }
+  function setItemChecked(itemKey, ticked) {
+    state[itemKey] = ticked;
+    localStorage.setItem(key, JSON.stringify(state));
 
-  // Initial placement based on saved state
-  table.querySelectorAll(".shop-row").forEach(row => {
-    const k = row.dataset.key;
-    const cb = row.querySelector(".shop-check");
-    if (state[k]) {
-      cb.checked = true;
-      moveRow(row, true);
+    // Update desktop table row if present
+    if (table) {
+      const row = table.querySelector(`.shop-row[data-key="${CSS.escape(itemKey)}"]`);
+      if (row) {
+        row.classList.toggle("checked", ticked);
+        const cb = row.querySelector(".shop-check");
+        if (cb) cb.checked = ticked;
+        (ticked ? doneTbody : todoTbody).appendChild(row);
+      }
     }
-    cb.addEventListener("change", () => {
-      state[k] = cb.checked;
-      localStorage.setItem(key, JSON.stringify(state));
-      moveRow(row, cb.checked);
-      updateCounts();
+    // Update mobile card if present
+    if (cardsWrap) {
+      const card = cardsWrap.querySelector(`.shop-card-row[data-key="${CSS.escape(itemKey)}"]`);
+      if (card) {
+        card.classList.toggle("checked", ticked);
+        (ticked ? doneCards : todoCards).appendChild(card);
+      }
+    }
+    updateCounts();
+  }
+
+  // Initial placement from saved state
+  Object.keys(state).forEach(k => { if (state[k]) setItemChecked(k, true); });
+
+  // Wire desktop table rows
+  if (table) {
+    table.querySelectorAll(".shop-row").forEach(row => {
+      const k = row.dataset.key;
+      const cb = row.querySelector(".shop-check");
+      cb.addEventListener("change", () => setItemChecked(k, cb.checked));
+      row.addEventListener("click", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        setItemChecked(k, !state[k]);
+      });
     });
-    // Tap anywhere on the row (not just the checkbox) for phone use
-    row.addEventListener("click", (e) => {
-      if (e.target.tagName === "INPUT") return;
-      cb.checked = !cb.checked;
-      cb.dispatchEvent(new Event("change"));
+  }
+
+  // Wire mobile card rows
+  if (cardsWrap) {
+    cardsWrap.querySelectorAll(".shop-card-row").forEach(card => {
+      const k = card.dataset.key;
+      card.addEventListener("click", () => setItemChecked(k, !state[k]));
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setItemChecked(k, !state[k]);
+        }
+      });
     });
-  });
+  }
+
   updateCounts();
 })();
 
@@ -939,19 +1112,32 @@ function resetShoppingChecks(planId) {
   if (!confirm("Bring everything back to the shopping list?")) return;
   localStorage.removeItem("shop:" + planId);
   const table = document.querySelector(`.shopping-table[data-plan-id="${planId}"]`);
-  if (!table) return;
-  const todoTbody = table.querySelector(".shop-todo");
-  table.querySelectorAll(".shop-done .shop-row").forEach(row => {
-    row.querySelector(".shop-check").checked = false;
-    row.classList.remove("checked");
-    todoTbody.appendChild(row);
-  });
-  // Trigger a fresh count
+  const cardsWrap = document.querySelector(`.shopping-cards-wrap[data-plan-id="${planId}"]`);
+
+  if (table) {
+    const todoTbody = table.querySelector(".shop-todo");
+    table.querySelectorAll(".shop-done .shop-row").forEach(row => {
+      row.querySelector(".shop-check").checked = false;
+      row.classList.remove("checked");
+      todoTbody.appendChild(row);
+    });
+    table.querySelector(".shop-done-head").style.display = "none";
+  }
+  if (cardsWrap) {
+    const todoCards = cardsWrap.querySelector(".shop-todo-cards");
+    const doneCards = cardsWrap.querySelector(".shop-done-cards");
+    doneCards.querySelectorAll(".shop-card-row").forEach(card => {
+      card.classList.remove("checked");
+      todoCards.appendChild(card);
+    });
+    cardsWrap.querySelector(".shop-done-cards-head").style.display = "none";
+  }
+
   const countTodo = document.querySelector(`.shop-count-todo[data-plan-id="${planId}"]`);
   const countDone = document.querySelector(`.shop-count-done[data-plan-id="${planId}"]`);
-  if (countTodo) countTodo.textContent = todoTbody.querySelectorAll(".shop-row").length + " to buy";
+  const allItems = (cardsWrap || table).querySelectorAll(cardsWrap ? ".shop-card-row" : ".shop-row").length;
+  if (countTodo) countTodo.textContent = allItems + " to buy";
   if (countDone) countDone.textContent = "0 got";
-  table.querySelector(".shop-done-head").style.display = "none";
 }
 </script>
 {% endblock %}

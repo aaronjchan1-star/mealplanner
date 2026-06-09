@@ -41,6 +41,31 @@ app = Flask(__name__)
 db.init_db(config.DB_PATH, config.HOUSEHOLD)
 
 
+# Map each Flask endpoint to which bottom-tab should be highlighted.
+# Pages not in the map get no active tab (e.g. the index page itself, /more).
+_TAB_FOR_ENDPOINT = {
+    "index": "home",
+    "plan_new": "plan",
+    "plan_view": "plan",
+    "shopping_current": "shopping",
+    "toddler": "toddler",
+    "more": "more",
+    "pantry": "more",
+    "dislikes": "more",
+    "schedules": "more",
+    "budget": "more",
+    "settings": "more",
+    "meal_quick": "more",
+}
+
+
+@app.context_processor
+def inject_active_tab():
+    """Make `active_tab` available in every template so the bottom tab bar
+    can highlight the right one. Endpoints not in the map get an empty value."""
+    return {"active_tab": _TAB_FOR_ENDPOINT.get(request.endpoint or "", "")}
+
+
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
@@ -76,6 +101,24 @@ def plan_new():
         "plan_new.html", prefs=prefs, error=None,
         kitchen_appliances=KITCHEN_APPLIANCES,
     )
+
+
+@app.route("/shopping")
+def shopping_current():
+    """Bottom-tab shortcut: jump to the most recent family plan's shopping list.
+    If there's none, redirect to the new-plan form. The plan view has an anchor
+    #shopping that we scroll to."""
+    plans = db.list_plans(config.DB_PATH, audience="family", limit=1)
+    if not plans:
+        return redirect(url_for("plan_new"))
+    return redirect(url_for("plan_view", plan_id=plans[0]["id"]) + "#shopping")
+
+
+@app.route("/more")
+def more():
+    """The bottom-tab 'More' destination — links to less-used admin pages."""
+    return render_template("more.html",
+                           prefs=db.get_preferences(config.DB_PATH))
 
 
 @app.route("/plan/<int:plan_id>")

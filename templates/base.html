@@ -2,22 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3ebdc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1c1f1d" media="(prefers-color-scheme: dark)">
   <title>{% block title %}Pantry{% endblock %} — Mealplanner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body data-page="{{ active_tab|default('') }}">
   <div class="grain"></div>
+
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">
       <span class="brand-mark">◐</span>
       <span class="brand-name">Mealplanner</span>
       <span class="brand-sub">a quieter kitchen</span>
     </a>
-    <nav class="nav">
+    <nav class="nav-desktop">
       <a href="{{ url_for('plan_new') }}">Plan</a>
       <a href="{{ url_for('toddler') }}">Toddler</a>
       <a href="{{ url_for('meal_quick') }}">Tonight</a>
@@ -34,8 +37,28 @@
   </main>
 
   <footer class="foot">
-    <span>self-hosted on a Raspberry Pi · {{ "%Y"|format() if false else "" }}</span>
+    <span>self-hosted on a Raspberry Pi</span>
   </footer>
+
+  {# Bottom tab bar — visible on mobile only via CSS #}
+  {% set tab = active_tab|default('') %}
+  <nav class="bottomtabs" aria-label="Primary">
+    <a class="tab{% if tab == 'home' %} active{% endif %}" href="{{ url_for('index') }}">
+      <span class="ic" aria-hidden="true">◐</span>Home
+    </a>
+    <a class="tab{% if tab == 'plan' %} active{% endif %}" href="{{ url_for('plan_new') }}">
+      <span class="ic" aria-hidden="true">✎</span>Plan
+    </a>
+    <a class="tab{% if tab == 'shopping' %} active{% endif %}" href="{{ url_for('shopping_current') }}">
+      <span class="ic" aria-hidden="true">🛒</span>Shop
+    </a>
+    <a class="tab{% if tab == 'toddler' %} active{% endif %}" href="{{ url_for('toddler') }}">
+      <span class="ic" aria-hidden="true">🍼</span>Toddler
+    </a>
+    <a class="tab{% if tab == 'more' %} active{% endif %}" href="{{ url_for('more') }}">
+      <span class="ic" aria-hidden="true">⋯</span>More
+    </a>
+  </nav>
 
   {% block scripts %}{% endblock %}
 </body>
